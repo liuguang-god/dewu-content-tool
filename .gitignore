@@ -1,0 +1,17 @@
+node_modules/
+data/
+*.db
+.env
+.env.local
+*.log
+.DS_Store
+Thumbs.db
+*.png
+*.jpg
+*.jpeg
+*.gif
+原型/
+ui-reference*.png
+ui1.png
+ui2.png
+test-ai.js

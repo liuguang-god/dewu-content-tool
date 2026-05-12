@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600">
+  <rect width="600" height="600" fill="#f2f4f7"/>
+  <rect x="140" y="160" width="320" height="320" rx="26" fill="#d8dde6"/>
+  <path d="M210 350l55-55 35 35 60-60 80 80v55H210z" fill="#b7c0cf"/>
+  <circle cx="255" cy="290" r="24" fill="#b7c0cf"/>
+  <text x="300" y="510" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" fill="#6b7280">Jellycat 邦尼兔 白色</text>
+</svg>

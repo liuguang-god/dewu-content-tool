@@ -1,0 +1,299 @@
+<%- include('partials/header', { activeNav: 'preview', contentId }) %>
+
+<div class="page">
+  <div class="breadcrumb">
+    <a href="/">商品列表</a>
+    <span>/</span>
+    <% if (product && product.id) { %>
+      <a href="/<%= product.id %>"><%= product.name %></a>
+      <span>/</span>
+    <% } %>
+    <span>内容预览</span>
+  </div>
+
+  <div style="display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);padding:10px 14px;margin-bottom:20px">
+    <div style="width:40px;height:40px;border-radius:var(--radius-sm);background:var(--bg);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;overflow:hidden">
+      <% if (product && (product.local_image_path || product.image_url)) { %>
+        <img src="<%= product.local_image_path || product.image_url %>" alt="" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display='none'">
+      <% } else { %>
+        🧸
+      <% } %>
+    </div>
+    <div style="flex:1;min-width:0">
+      <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+        <%= product ? product.name : '—' %>
+      </div>
+      <div style="font-size:11.5px;color:var(--muted)">
+        <%= product && product.price ? ('¥' + product.price) : '价格待定' %>
+        <% if (content && content.ai_text_body) { %> · 内容已生成 · <strong style="color:var(--fg);font-weight:500">可编辑</strong><% } %>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)">
+      <span style="width:7px;height:7px;border-radius:50%;background:var(--success)"></span>
+      <span>内容已生成 · <strong style="color:var(--fg);font-weight:500">可编辑</strong></span>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:start">
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;position:relative;aspect-ratio:1" id="imageCard">
+        <img id="previewImg"
+             src="<%= content && content.ai_image_url ? content.ai_image_url : 'https://placehold.co/600x600/e8f4fd/1a8ccc?text=AI种草图' %>"
+             alt="AI生成的种草图片"
+             style="width:100%;height:100%;object-fit:cover;display:block"
+             onerror="this.onerror=null;this.src='data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%22600%22%20height%3D%22600%22%20viewBox%3D%220%200%20600%20600%22%3E%3Crect%20width%3D%22600%22%20height%3D%22600%22%20fill%3D%22%23f2f4f7%22/%3E%3Cpath%20d%3D%22M170%20440h260c16%200%2030-14%2030-30V220c0-16-14-30-30-30H170c-16%200-30%2014-30%2030v190c0%2016%2014%2030%2030%2030z%22%20fill%3D%22%23d8dde6%22/%3E%3Cpath%20d%3D%22M210%20330l55-55%2035%2035%2060-60%2080%2080v55H210z%22%20fill%3D%22%23b7c0cf%22/%3E%3Ccircle%20cx%3D%22255%22%20cy%3D%22260%22%20r%3D%2224%22%20fill%3D%22%23b7c0cf%22/%3E%3Ctext%20x%3D%22300%22%20y%3D%22515%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20sans-serif%22%20font-size%3D%2220%22%20fill%3D%22%236b7280%22%3EImage%20unavailable%3C/text%3E%3C/svg%3E'">
+
+        <div style="position:absolute;inset:0;background:rgba(0,0,0,0);display:flex;align-items:flex-end;justify-content:center;padding:16px;transition:background 0.2s"
+             class="image-overlay"
+             onmouseenter="this.style.background='rgba(0,0,0,0.35)'; this.querySelector('button').style.opacity='1';"
+             onmouseleave="this.style.background='rgba(0,0,0,0)'; this.querySelector('button').style.opacity='0';">
+          <button class="btn" id="regenerateImageBtn" type="button" style="background:white;border:none;opacity:0;transition:opacity 0.2s">
+            重新生成
+          </button>
+        </div>
+
+        <span style="position:absolute;bottom:12px;left:12px;background:rgba(0,0,0,0.6);color:white;font-size:10px;padding:3px 7px;border-radius:4px;font-variant-numeric:tabular-nums">1024 × 1024</span>
+      </div>
+
+      <div style="display:flex;align-items:center;justify-content:space-between;font-size:11.5px;color:var(--muted)">
+        <span>通义万相 · wanx-v1</span>
+        <span>—</span>
+      </div>
+
+      <button class="btn" id="regenerateImageBtnBottom" type="button" style="width:100%;border-style:dashed;color:var(--muted);background:transparent">
+        重新生成图片
+      </button>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden">
+        <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+          <span style="font-size:13px;font-weight:600;letter-spacing:-0.01em">标题</span>
+          <span style="font-size:11px;padding:2px 7px;border-radius:20px;background:var(--bg);color:var(--muted);border:1px solid var(--border)">得物笔记</span>
+        </div>
+        <div style="padding:18px;display:flex;flex-direction:column;gap:12px">
+          <input id="titleInput"
+                 type="text"
+                 value="<%= content && content.ai_text_title ? content.ai_text_title : '' %>"
+                 maxlength="30"
+                 placeholder="输入标题…"
+                 style="width:100%;font-family:var(--font-display);font-size:20px;font-weight:600;letter-spacing:-0.02em;color:var(--fg);border:1.5px solid transparent;border-radius:var(--radius-sm);padding:8px 10px;background:transparent;outline:none;line-height:1.3"
+                 onfocus="this.style.borderColor='var(--accent)'; this.style.background='var(--bg)';"
+                 onblur="this.style.borderColor='transparent'; this.style.background='transparent';">
+          <div style="font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;text-align:right">
+            <span id="titleCount"><%= content && content.ai_text_title ? content.ai_text_title.length : 0 %></span> / 30 字
+          </div>
+        </div>
+      </div>
+
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden">
+        <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+          <span style="font-size:13px;font-weight:600;letter-spacing:-0.01em">正文</span>
+          <span style="font-size:11px;padding:2px 7px;border-radius:20px;background:var(--bg);color:var(--muted);border:1px solid var(--border)">通义千问</span>
+        </div>
+        <div style="padding:18px;display:flex;flex-direction:column;gap:12px">
+          <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--muted);margin-bottom:-6px">种草正文</div>
+          <textarea id="bodyInput"
+                    style="width:100%;font-family:var(--font-body);font-size:13.5px;line-height:1.7;color:var(--fg);border:1.5px solid transparent;border-radius:var(--radius-sm);padding:10px 12px;background:transparent;outline:none;resize:vertical;min-height:140px"
+                    onfocus="this.style.borderColor='var(--accent)'; this.style.background='var(--bg)';"
+                    onblur="this.style.borderColor='transparent'; this.style.background='transparent';"><%= content && content.ai_text_body ? content.ai_text_body : '' %></textarea>
+          <div style="font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;text-align:right">
+            <span id="bodyCount"><%= content && content.ai_text_body ? content.ai_text_body.replace(/\\s/g,'').length : 0 %></span> 字
+          </div>
+          <div style="font-size:11.5px;color:var(--muted);display:flex;align-items:center;gap:5px">
+            文案将在导出页面复制/下载
+          </div>
+        </div>
+      </div>
+
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden">
+        <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+          <span style="font-size:13px;font-weight:600;letter-spacing:-0.01em">标签</span>
+          <span style="font-size:11px;padding:2px 7px;border-radius:20px;background:var(--bg);color:var(--muted);border:1px solid var(--border)">#话题</span>
+        </div>
+        <div style="padding:18px;display:flex;flex-direction:column;gap:12px">
+          <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--muted);margin-bottom:-6px">添加标签（回车确认）</div>
+          <div id="tagsWrap" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+          <button class="btn" id="addTagBtn" type="button" style="border-style:dashed;color:var(--muted);background:transparent;justify-content:flex-start">
+            + 添加
+          </button>
+        </div>
+      </div>
+
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px">
+        <div style="display:flex;gap:8px">
+          <button class="btn" id="regenerateTextBtn" type="button">重新生成文案</button>
+          <button class="btn" id="savePreviewBtn" type="button">保存修改</button>
+        </div>
+        <a class="btn btn-primary btn-large" href="<%= contentId ? '/export/' + contentId : '/export' %>">
+          确认导出
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  (function () {
+    const contentId = <%- JSON.stringify(contentId || null) %>;
+    const initialTags = <%- JSON.stringify(tags || []) %>;
+
+    const toastEl = document.getElementById('toast');
+    const titleInput = document.getElementById('titleInput');
+    const bodyInput = document.getElementById('bodyInput');
+    const titleCount = document.getElementById('titleCount');
+    const bodyCount = document.getElementById('bodyCount');
+    const tagsWrap = document.getElementById('tagsWrap');
+
+    const regenerateTextBtn = document.getElementById('regenerateTextBtn');
+    const regenerateImageBtn = document.getElementById('regenerateImageBtn');
+    const regenerateImageBtnBottom = document.getElementById('regenerateImageBtnBottom');
+    const addTagBtn = document.getElementById('addTagBtn');
+    const savePreviewBtn = document.getElementById('savePreviewBtn');
+
+    function showToast(message) {
+      if (!toastEl) return;
+      toastEl.textContent = message;
+      toastEl.classList.add('visible');
+      window.setTimeout(() => toastEl.classList.remove('visible'), 2200);
+    }
+
+    function normalizeTag(raw) {
+      const trimmed = String(raw || '').trim();
+      if (!trimmed) return null;
+      return trimmed.startsWith('#') ? trimmed : `#${trimmed}`;
+    }
+
+    function renderTags(tags) {
+      tagsWrap.innerHTML = '';
+      tags.forEach(tag => {
+        const chip = document.createElement('span');
+        chip.className = 'tag';
+        chip.style.display = 'inline-flex';
+        chip.style.alignItems = 'center';
+        chip.style.gap = '4px';
+        chip.style.padding = '4px 10px';
+        chip.style.borderRadius = '20px';
+        chip.style.background = 'var(--accent-light)';
+        chip.style.color = 'var(--accent)';
+        chip.style.fontSize = '12px';
+        chip.style.fontWeight = '500';
+        chip.textContent = tag;
+
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.textContent = '×';
+        remove.style.width = '14px';
+        remove.style.height = '14px';
+        remove.style.borderRadius = '50%';
+        remove.style.border = 'none';
+        remove.style.background = 'transparent';
+        remove.style.cursor = 'pointer';
+        remove.style.color = 'var(--accent)';
+        remove.style.opacity = '0.6';
+        remove.addEventListener('click', () => {
+          const next = currentTags.filter(t => t !== tag);
+          currentTags = next;
+          renderTags(currentTags);
+        });
+
+        chip.appendChild(remove);
+        tagsWrap.appendChild(chip);
+      });
+    }
+
+    let currentTags = Array.isArray(initialTags) ? [...initialTags] : [];
+    renderTags(currentTags);
+
+    titleInput?.addEventListener('input', () => {
+      titleCount.textContent = String(titleInput.value.length);
+    });
+
+    bodyInput?.addEventListener('input', () => {
+      bodyCount.textContent = String(bodyInput.value.replace(/\\s/g, '').length);
+    });
+
+    addTagBtn?.addEventListener('click', () => {
+      const raw = window.prompt('输入标签（不带#）：');
+      const normalized = normalizeTag(raw);
+      if (!normalized) return;
+      if (currentTags.includes(normalized)) return;
+      currentTags = [...currentTags, normalized];
+      renderTags(currentTags);
+    });
+
+    async function callApi(url, method) {
+      if (!contentId) {
+        showToast('缺少内容 ID');
+        return null;
+      }
+      try {
+        const response = await fetch(url, { method });
+        const payload = await response.json();
+        if (!payload?.success) {
+          showToast(payload?.message || '请求失败');
+          return null;
+        }
+        return payload;
+      } catch (err) {
+        showToast(err instanceof Error ? err.message : '请求异常');
+        return null;
+      }
+    }
+
+    regenerateTextBtn?.addEventListener('click', async () => {
+      const payload = await callApi(`/api/contents/${contentId}/regenerate-text`, 'POST');
+      if (!payload) return;
+      titleInput.value = payload.data?.title || '';
+      bodyInput.value = payload.data?.body || '';
+      titleCount.textContent = String(titleInput.value.length);
+      bodyCount.textContent = String(bodyInput.value.replace(/\\s/g, '').length);
+      currentTags = Array.isArray(payload.data?.tags) ? payload.data.tags.map(String) : currentTags;
+      renderTags(currentTags);
+      showToast('✅ 文案已重新生成');
+    });
+
+    function bindRegenerateImage(button) {
+      button?.addEventListener('click', async () => {
+        const payload = await callApi(`/api/contents/${contentId}/regenerate-image`, 'POST');
+        if (!payload) return;
+        const imgUrl = payload.data?.imageUrl;
+        const imgEl = document.getElementById('previewImg');
+        if (imgUrl && imgEl) imgEl.src = imgUrl;
+        showToast('✨ 图片已重新生成');
+      });
+    }
+
+    bindRegenerateImage(regenerateImageBtn);
+    bindRegenerateImage(regenerateImageBtnBottom);
+
+    savePreviewBtn?.addEventListener('click', async () => {
+      if (!contentId) return;
+      try {
+        const response = await fetch(`/api/contents/${contentId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            aiTextTitle: titleInput.value,
+            aiTextBody: bodyInput.value,
+            aiTextTags: currentTags
+          })
+        });
+        const payload = await response.json();
+        if (!payload?.success) {
+          showToast(payload?.message || '保存失败');
+          return;
+        }
+        showToast('✅ 已保存');
+      } catch (err) {
+        showToast(err instanceof Error ? err.message : '保存异常');
+      }
+    });
+  })();
+</script>
+
+<%- include('partials/footer') %>
+

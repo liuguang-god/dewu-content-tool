@@ -1,0 +1,14 @@
+<%- include('partials/header', { activeNav: '', contentId: null, product: null }) %>
+
+<div class="page app-error-page">
+  <div class="app-error-card">
+    <div class="app-error-icon" aria-hidden="true">!</div>
+    <h1 class="app-error-heading">页面无法显示</h1>
+    <p class="app-error-message"><%= message || '出错了，请稍后再试。' %></p>
+    <div class="app-error-actions">
+      <a href="/" class="btn btn-primary btn-large">返回首页</a>
+    </div>
+  </div>
+</div>
+
+<%- include('partials/footer') %>

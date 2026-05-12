@@ -1,0 +1,40 @@
+<%- include('partials/header', {
+  activeNav: hubKind === 'preview' ? 'preview' : 'export',
+  contentId: null,
+  product: null
+}) %>
+
+<div class="page flow-hub">
+  <div class="flow-hub-top">
+    <h1 class="flow-hub-title"><%= hubTitle %></h1>
+    <p class="flow-hub-sub"><%= hubSubtitle %></p>
+  </div>
+
+  <% if (!recentContents || recentContents.length === 0) { %>
+    <div class="flow-hub-empty">
+      <span class="flow-hub-empty-ico" aria-hidden="true">📋</span>
+      <p class="flow-hub-empty-lead">还没有可预览的内容</p>
+      <p class="flow-hub-empty-hint">在商品详情页生成内容后，会出现在此列表中。</p>
+      <a href="/" class="btn btn-primary btn-large">去商品列表</a>
+    </div>
+  <% } else { %>
+    <p class="flow-hub-hint">最近更新 · 点击一行进入</p>
+    <div class="flow-hub-list" role="list">
+      <% recentContents.forEach(function (row) { %>
+        <a class="flow-hub-row" role="listitem" href="<%= targetBase %>/<%= row.id %>">
+          <span class="flow-hub-badge">#<%= row.id %></span>
+          <span class="flow-hub-row-main">
+            <span class="flow-hub-row-title"><%= row.ai_text_title || '（无标题）' %></span>
+            <span class="flow-hub-row-meta"><%= row.product_name || '商品 #' + row.product_id %></span>
+          </span>
+          <span class="flow-hub-row-go" aria-hidden="true">→</span>
+        </a>
+      <% }) %>
+    </div>
+    <p class="flow-hub-foot">
+      <a href="/" class="flow-hub-link-muted">← 返回商品列表</a>
+    </p>
+  <% } %>
+</div>
+
+<%- include('partials/footer') %>

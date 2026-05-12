@@ -1,0 +1,26 @@
+{
+  "name": "dewu-content-tool",
+  "version": "1.0.0",
+  "description": "得物种草自动化工具 - 抓取热门商品，AI生成种草图和文案",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "scrape": "node src/scraper/dewu.js"
+  },
+  "keywords": ["dewu", "得物", "ai", "content-generator", "scraper"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "ejs": "^3.1.9",
+    "sql.js": "^1.9.0",
+    "puppeteer": "^21.7.0",
+    "axios": "^1.6.2",
+    "dotenv": "^16.3.1",
+    "cheerio": "^1.0.0-rc.12"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  }
+}

@@ -1,0 +1,303 @@
+<%- include('partials/header', { activeNav: 'export', contentId }) %>
+
+<div class="page page-export">
+  <!-- 页面标题 -->
+  <div class="export-topbar">
+    <div>
+      <h1 class="export-ptitle">导出中心</h1>
+      <p class="export-psub">下载图片、复制文案，准备发布到得物社区</p>
+    </div>
+  </div>
+
+  <!-- 统计行 -->
+  <div class="stats-row">
+    <div class="stat-block">
+      <div class="stat-big"><%= stats?.exported ?? 0 %></div>
+      <div class="stat-gray">已导出内容</div>
+    </div>
+    <div class="stat-sep"></div>
+    <div class="stat-block">
+      <div class="stat-big"><%= stats?.pending ?? 0 %></div>
+      <div class="stat-gray">待导出</div>
+    </div>
+    <div class="stat-sep"></div>
+    <div class="stat-block">
+      <div class="stat-big"><%= stats?.monthNew ?? 0 %></div>
+      <div class="stat-gray">本月新增</div>
+    </div>
+    <div class="stat-sep"></div>
+    <div class="stat-block">
+      <div class="stat-big"><%= stats?.exposure ?? 0 %></div>
+      <div class="stat-gray">累计曝光预估</div>
+    </div>
+  </div>
+
+  <!-- 主卡片：顶部Tab切换 内容 -->
+  <div class="export-card">
+    <!-- 卡片顶部：模式切换 -->
+    <div class="export-card-head">
+      <button class="ec-tab active" data-panel="image">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
+        下载图片
+      </button>
+      <button class="ec-tab" data-panel="text">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+        复制文案
+      </button>
+    </div>
+
+    <!-- 图片模式 -->
+    <div class="ec-panel" id="ecImage">
+      <div class="ec-image-grid">
+        <!-- 左侧图片 -->
+        <div class="ec-img-area">
+          <div class="ec-img-wrap">
+            <img id="exportImg"
+                 src="<%= content && content.ai_image_url ? content.ai_image_url : '' %>"
+                 alt=""
+                 style="<%= content && content.ai_image_url ? '' : 'display:none' %>">
+            <div class="ec-img-empty" id="ecImgEmpty" style="<%= content && content.ai_image_url ? 'display:none' : '' %>">
+              <span class="ec-img-empty-ico">🖼</span>
+            </div>
+          </div>
+          <div class="ec-img-sizetag">1024 × 1024 px</div>
+        </div>
+        <!-- 右侧信息 -->
+        <div class="ec-img-info">
+          <div class="ec-prod-card">
+            <div class="ec-prod-thumb">
+              <% if (product && (product.local_image_path || product.image_url)) { %>
+                <img src="<%= product.local_image_path || product.image_url %>" alt="" onerror="this.style.display='none'">
+              <% } else { %>
+                <span>🧸</span>
+              <% } %>
+            </div>
+            <div class="ec-prod-detail">
+              <div class="ec-prod-name"><%= product ? product.name : '' %></div>
+              <div class="ec-prod-price"><%= product && product.price ? '¥' + product.price : '' %></div>
+            </div>
+            <div class="ec-prod-status">
+              <span class="ec-status-dot"></span>
+              已生成
+            </div>
+          </div>
+          <div class="ec-img-actions">
+            <button class="ec-btn-primary" id="downloadImageBtn" type="button" data-download-name="<%= exportImageDownloadFilename %>">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+              下载图片
+            </button>
+            <a class="ec-btn-ghost" href="<%= contentId ? '/preview/' + contentId : '/preview' %>">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a.996.996 0 000-1.41l-2.34-2.34a.996.996 0 00-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+              重新编辑
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 文案模式 -->
+    <div class="ec-panel" id="ecText" style="display:none">
+      <!-- 文案内Tab -->
+      <div class="ec-text-tabs">
+        <button class="ec-text-tab active" data-tab="all">完整文案</button>
+        <button class="ec-text-tab" data-tab="title">标题</button>
+        <button class="ec-text-tab" data-tab="body">正文</button>
+        <button class="ec-text-tab" data-tab="tags">标签</button>
+      </div>
+
+      <!-- 完整文案 -->
+      <div class="ec-text-panel" id="ecTabAll">
+        <div class="ec-text-box"><%= fullText %></div>
+        <div class="ec-text-bar">
+          <span class="ec-char-count">共 <%= (fullText||'').replace(/\s/g,'').length %> 字</span>
+          <button class="ec-btn-copy-sm" id="ecCopyAll" type="button">📋 复制文案</button>
+        </div>
+      </div>
+
+      <!-- 标题 -->
+      <div class="ec-text-panel" id="ecTabTitle" style="display:none">
+        <div class="ec-text-box ec-title-text"><%= titleText %></div>
+        <div class="ec-text-bar">
+          <span class="ec-char-count">共 <%= (titleText||'').length %> 字</span>
+          <button class="ec-btn-copy-sm" id="ecCopyTitle" type="button">📋 复制文案</button>
+        </div>
+      </div>
+
+      <!-- 正文 -->
+      <div class="ec-text-panel" id="ecTabBody" style="display:none">
+        <div class="ec-text-box"><%= bodyText %></div>
+        <div class="ec-text-bar">
+          <span class="ec-char-count">共 <%= (bodyText||'').replace(/\s/g,'').length %> 字</span>
+          <button class="ec-btn-copy-sm" id="ecCopyBody" type="button">📋 复制文案</button>
+        </div>
+      </div>
+
+      <!-- 标签 -->
+      <div class="ec-text-panel" id="ecTabTags" style="display:none">
+        <div class="ec-tags-cloud">
+          <% tags.forEach(function(t) { %>
+            <span class="ec-tag"><%= t %></span>
+          <% }) %>
+        </div>
+        <div class="ec-text-bar">
+          <span class="ec-char-count">共 <%= tags.length %> 个标签</span>
+        </div>
+      </div>
+
+      <!-- 文案操作按钮 -->
+      <div class="ec-text-actions">
+        <button class="ec-btn-ghost" id="ecCopyText" type="button">📋 复制文案</button>
+        <button class="ec-btn-primary" id="ecCopyFormatted" type="button">✅ 一键复制</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 导出历史 -->
+  <div class="history-block">
+    <div class="history-head">
+      <span>导出历史</span>
+      <span class="history-total">共 <%= exportHistory.length %> 条</span>
+    </div>
+    <div class="history-table">
+      <div class="hrow hrow-head">
+        <span>封面</span>
+        <span>内容</span>
+        <span>格式</span>
+        <span>导出时间</span>
+        <span>操作</span>
+      </div>
+      <% exportHistory.forEach(function(row) { %>
+        <div class="hrow">
+          <div class="hthumb">
+            <% if (row.thumbUrl) { %>
+              <img src="<%= row.thumbUrl %>" alt="" onerror="this.style.display='none'">
+            <% } %>
+          </div>
+          <div class="hinfo">
+            <div class="htitle"><%= row.title %></div>
+            <div class="hmeta"><%= row.meta %></div>
+          </div>
+          <span class="hfmt"><%= row.format %></span>
+          <span class="htime"><%= row.time %></span>
+          <button class="hretry" type="button" title="重新导出">↻</button>
+        </div>
+      <% }) %>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  (function () {
+    var toast = document.getElementById('toast');
+    function showToast(msg) {
+      if (!toast) return;
+      toast.textContent = msg;
+      toast.classList.add('visible');
+      setTimeout(function () { toast.classList.remove('visible'); }, 2200);
+    }
+    window.__showToast = showToast;
+
+    async function copyText(text) {
+      try { await navigator.clipboard.writeText(text); return true; } catch (e) { return false; }
+    }
+
+    // 模式Tab切换
+    var ecTabs = document.querySelectorAll('.ec-tab');
+    ecTabs.forEach(function (tab) {
+      tab.addEventListener('click', function () {
+        ecTabs.forEach(function (t) { t.classList.remove('active'); });
+        tab.classList.add('active');
+        var panel = tab.dataset.panel;
+        document.getElementById('ecImage').style.display = panel === 'image' ? '' : 'none';
+        document.getElementById('ecText').style.display = panel === 'text' ? '' : 'none';
+      });
+    });
+
+    // 文案内Tab切换
+    var textTabs = document.querySelectorAll('.ec-text-tab');
+    textTabs.forEach(function (tab) {
+      tab.addEventListener('click', function () {
+        textTabs.forEach(function (t) { t.classList.remove('active'); });
+        tab.classList.add('active');
+        var k = tab.dataset.tab;
+        document.getElementById('ecTabAll').style.display = k === 'all' ? '' : 'none';
+        document.getElementById('ecTabTitle').style.display = k === 'title' ? '' : 'none';
+        document.getElementById('ecTabBody').style.display = k === 'body' ? '' : 'none';
+        document.getElementById('ecTabTags').style.display = k === 'tags' ? '' : 'none';
+      });
+    });
+
+    // 文案数据用 JSON.stringify 注入；须用「非 HTML 转义」的 EJS 输出，否则引号会变成实体、脚本非法
+    var fullText = <%- JSON.stringify(fullText || '') %>;
+    var formattedText = <%- JSON.stringify(formattedText || '') %>;
+    var titleText = <%- JSON.stringify(titleText || '') %>;
+    var bodyText = <%- JSON.stringify(bodyText || '') %>;
+
+    document.getElementById('ecCopyFormatted')?.addEventListener('click', async function () {
+      var ok = await copyText(formattedText);
+      if (!ok) { showToast('复制失败，请手动复制'); return; }
+      showToast('已复制到剪贴板');
+    });
+
+    document.getElementById('ecCopyText')?.addEventListener('click', async function () {
+      var ok = await copyText(fullText);
+      if (!ok) { showToast('复制失败，请手动复制'); return; }
+      showToast('已复制到剪贴板');
+    });
+
+    document.getElementById('ecCopyAll')?.addEventListener('click', async function () {
+      var ok = await copyText(fullText);
+      if (!ok) { showToast('复制失败，请手动复制'); return; }
+      showToast('已复制到剪贴板');
+    });
+
+    document.getElementById('ecCopyTitle')?.addEventListener('click', async function () {
+      var ok = await copyText(titleText);
+      if (!ok) { showToast('复制失败，请手动复制'); return; }
+      showToast('已复制到剪贴板');
+    });
+
+    document.getElementById('ecCopyBody')?.addEventListener('click', async function () {
+      var ok = await copyText(bodyText);
+      if (!ok) { showToast('复制失败，请手动复制'); return; }
+      showToast('已复制到剪贴板');
+    });
+
+    var exportContentId = <%- JSON.stringify(contentId) %>;
+    var exportDownloadName = <%- JSON.stringify(typeof exportImageDownloadFilename !== 'undefined' ? exportImageDownloadFilename : '@image_导出.png') %>;
+
+    document.getElementById('downloadImageBtn')?.addEventListener('click', async function () {
+      var img = document.getElementById('exportImg');
+      if (!img || !img.src || img.style.display === 'none') { showToast('没有可下载的图片'); return; }
+      if (!exportContentId) { showToast('缺少内容 ID'); return; }
+      try {
+        var r = await fetch('/api/contents/' + exportContentId + '/download-image');
+        if (!r.ok) {
+          var errText = '下载失败';
+          try {
+            var j = await r.json();
+            if (j && j.message) errText = j.message;
+          } catch (e2) { /* ignore */ }
+          showToast(errText);
+          return;
+        }
+        var blob = await r.blob();
+        var u = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = u;
+        a.download = exportDownloadName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(u);
+        showToast('图片已下载');
+      } catch (e) {
+        showToast('下载失败: ' + (e && e.message ? e.message : '网络错误'));
+      }
+    });
+  })();
+</script>
+
+<%- include('partials/footer') %>

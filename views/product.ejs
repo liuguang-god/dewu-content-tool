@@ -1,0 +1,162 @@
+<%- include('partials/header', { activeNav: 'product', product }) %>
+
+<div class="page" style="max-width:1200px">
+  <div class="breadcrumb" style="margin-bottom:8px">
+    <a href="/">商品列表</a>
+    <span>/</span>
+    <span><%= product.name %></span>
+  </div>
+
+  <div style="display:grid;grid-template-columns:420px 1fr;gap:48px;align-items:start">
+    <div>
+      <div class="product-image" style="border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;aspect-ratio:1;margin-bottom:20px">
+        <% if (product.local_image_path || product.image_url) { %>
+          <img src="<%= product.local_image_path || product.image_url %>"
+               alt="<%= product.name %>"
+               onerror="this.onerror=null;this.src='data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%22600%22%20height%3D%22600%22%20viewBox%3D%220%200%20600%20600%22%3E%3Crect%20width%3D%22600%22%20height%3D%22600%22%20fill%3D%22%23f2f4f7%22/%3E%3Cpath%20d%3D%22M170%20440h260c16%200%2030-14%2030-30V220c0-16-14-30-30-30H170c-16%200-30%2014-30%2030v190c0%2016%2014%2030%2030%2030z%22%20fill%3D%22%23d8dde6%22/%3E%3Cpath%20d%3D%22M210%20330l55-55%2035%2035%2060-60%2080%2080v55H210z%22%20fill%3D%22%23b7c0cf%22/%3E%3Ccircle%20cx%3D%22255%22%20cy%3D%22260%22%20r%3D%2224%22%20fill%3D%22%23b7c0cf%22/%3E%3Ctext%20x%3D%22300%22%20y%3D%22515%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20sans-serif%22%20font-size%3D%2220%22%20fill%3D%22%236b7280%22%3EImage%20unavailable%3C/text%3E%3C/svg%3E'">
+        <% } else { %>
+          <div class="placeholder" style="font-size:80px">🧸</div>
+        <% } %>
+
+        <% const catInfo = categoryMap[product.category]; %>
+        <% if (catInfo) { %>
+          <span class="product-badge badge-<%= product.category %>" style="top:12px;left:12px;padding:4px 9px;font-size:11px"><%= catInfo.label %></span>
+        <% } %>
+      </div>
+
+      <h1 class="main-title" style="font-size:20px;margin-bottom:14px"><%= product.name %></h1>
+
+      <div style="display:flex;flex-direction:column;gap:10px;border:1px solid var(--border);border-radius:var(--radius-md);padding:14px 16px;background:var(--surface)">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <span style="font-size:12.5px;color:var(--muted)">商品价格</span>
+          <span style="font-family:var(--font-display);font-size:26px;font-weight:700;letter-spacing:-0.03em">
+            <%= product.price ? ('¥' + product.price) : '价格待定' %>
+            <% if (product.price) { %><span style="font-size:13px;font-weight:400;color:var(--muted)"> 券后价</span><% } %>
+          </span>
+        </div>
+        <hr style="border:none;border-top:1px solid var(--border)">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <span style="font-size:12.5px;color:var(--muted)">所属品类</span>
+          <span style="font-size:13.5px;font-weight:500"><%= categoryMap[product.category]?.label || '未知品类' %></span>
+        </div>
+        <hr style="border:none;border-top:1px solid var(--border)">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <span style="font-size:12.5px;color:var(--muted)">商品链接</span>
+          <% if (product.product_url) { %>
+            <a href="<%= product.product_url %>" target="_blank" rel="noreferrer" style="font-size:12.5px;color:var(--muted)">
+              打开得物详情页
+            </a>
+          <% } else { %>
+            <span style="font-size:12.5px;color:var(--muted)">—</span>
+          <% } %>
+        </div>
+      </div>
+
+      <% if (contents && contents.length > 0) { %>
+        <div style="margin-top:16px">
+          <div style="font-size:13px;font-weight:600;letter-spacing:0.01em;color:var(--muted);margin-bottom:14px;text-transform:uppercase">生成历史</div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <% contents.forEach(function(content) { %>
+              <a href="/preview/<%= content.id %>" class="filter-item" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);padding:12px 14px;gap:12px;justify-content:flex-start">
+                <span style="width:48px;height:48px;border-radius:var(--radius-sm);background:var(--bg);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:20px">🧸</span>
+                <span style="flex:1;min-width:0">
+                  <span style="display:block;font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+                    <%= content.ai_text_title || '无标题' %>
+                  </span>
+                  <span style="display:block;font-size:11.5px;color:var(--muted)">
+                    <%= new Date(content.created_at).toLocaleString('zh-CN') %>
+                  </span>
+                </span>
+                <span style="font-size:11px;font-weight:500;padding:3px 8px;border-radius:20px;flex-shrink:0;background:var(--bg);color:var(--muted);border:1px solid var(--border)">
+                  <%= content.status === 'draft' ? '草稿' : '待导出' %>
+                </span>
+              </a>
+            <% }); %>
+          </div>
+        </div>
+      <% } %>
+    </div>
+
+    <div>
+      <div style="display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);padding:10px 14px;margin-bottom:18px">
+        <span style="width:8px;height:8px;border-radius:50%;background:var(--success)"></span>
+        <span style="font-size:12.5px;color:var(--muted);flex:1">
+          已有 <strong style="color:var(--fg);font-weight:500"><%= (contents && contents.length) ? contents.length : 0 %></strong> 条种草内容
+        </span>
+      </div>
+
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden">
+        <div style="padding:18px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+          <span style="font-size:15px;font-weight:600;letter-spacing:-0.01em">AI 内容生成</span>
+          <span style="font-size:11px;font-weight:500;padding:3px 8px;border-radius:20px;background:var(--bg);color:var(--muted);border:1px solid var(--border)">通义万相 + 通义千问</span>
+        </div>
+
+        <div style="padding:22px">
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <div id="generateStatus" style="display:none">
+              <div class="scrape-status visible" style="display:block" id="generateStatusLine">
+                <span class="dot"></span>
+                AI 正在生成种草内容，请稍候…
+              </div>
+
+              <div id="generateConsole" class="generation-console" style="display:none" aria-live="polite">
+                <div class="generation-console-head">
+                  <span class="generation-console-title">运行日志</span>
+                  <span class="generation-console-sub">与服务端控制台同步</span>
+                </div>
+                <div class="generation-console-banner" id="generateConsoleBanner">
+                  <div class="generation-console-line muted">====================================</div>
+                  <div class="generation-console-line accent">得物种草自动化工具</div>
+                  <div class="generation-console-line">访问地址：<span id="generateConsoleOrigin"></span></div>
+                  <div class="generation-console-line muted">====================================</div>
+                </div>
+                <div class="generation-console-body-wrap" id="generateConsoleBodyWrap">
+                  <div class="generation-console-body" id="generateConsoleBody"></div>
+                </div>
+                <div class="generation-console-progress" id="generateConsoleProgress" hidden>
+                  <div class="generation-console-progress-row">
+                    <div class="generation-console-progress-track">
+                      <div class="generation-console-progress-bar" id="generateConsoleProgressBar" style="width:0%"></div>
+                    </div>
+                    <span class="generation-console-progress-label" id="generateConsoleProgressLabel"></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div id="generateResult" style="display:none">
+              <div style="display:grid;grid-template-columns:1fr;gap:12px">
+                <div style="border:1px solid var(--border);border-radius:var(--radius-md);overflow:hidden;background:var(--bg)">
+                  <img id="aiImage" src="" alt="AI生成图片" style="width:100%;height:auto;display:block;max-height:420px;object-fit:contain">
+                </div>
+
+                <div style="border:1px solid var(--border);border-radius:var(--radius-md);padding:14px 16px;background:var(--bg)">
+                  <div id="aiTitle" style="font-family:var(--font-display);font-size:17px;font-weight:600;letter-spacing:-0.01em;line-height:1.4;margin-bottom:8px"></div>
+                  <div id="aiBody" style="white-space:pre-wrap;font-size:13px;line-height:1.7"></div>
+                  <div id="aiTags" style="margin-top:10px;display:flex;flex-wrap:wrap;gap:6px"></div>
+                </div>
+
+                <div style="display:flex;gap:10px">
+                  <button class="btn" id="regenerateImageBtn" type="button">重新生成图片</button>
+                  <button class="btn" id="regenerateTextBtn" type="button">重新生成文案</button>
+                </div>
+
+                <div style="display:flex;gap:10px">
+                  <button class="btn" id="copyTextBtn" type="button">复制文案</button>
+                  <button class="btn btn-primary" id="downloadImageBtn" type="button" data-download-name="<%= exportImageDownloadFilename %>">下载图片</button>
+                  <a class="btn btn-primary" href="/preview" id="previewLink" style="display:none">查看内容</a>
+                </div>
+              </div>
+            </div>
+
+            <button class="btn btn-primary btn-large" id="generateBtn" data-product-id="<%= product.id %>" type="button">
+              立即生成种草内容
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<%- include('partials/footer') %>
