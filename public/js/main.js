@@ -57,34 +57,249 @@ function setScrapeStatusVisible(visible) {
   status.classList.toggle('visible', visible);
 }
 
+// 抓取进度面板状态
+let scrapeEventSource = null;
+let scrapeConsoleExpanded = true;
+
+// 定义步骤配置
+const SCRAPE_STEPS = [
+  { id: 'env', label: '环境检查', icon: '🔍' },
+  { id: 'adb', label: '连接模拟器', icon: '📱' },
+  { id: 'proxy', label: '启动代理', icon: '🔗' },
+  { id: 'config', label: '配置代理', icon: '⚙️' },
+  { id: 'auto', label: '自动化操控', icon: '🤖' },
+  { id: 'parse', label: '解析数据', icon: '📊' },
+  { id: 'image', label: '下载图片', icon: '🖼️' },
+  { id: 'save', label: '保存数据', icon: '💾' }
+];
+
+// 步骤名到 id 的映射
+const STEP_NAME_MAP = {
+  '环境检查': 'env',
+  '连接模拟器': 'adb',
+  '启动代理': 'proxy',
+  '配置代理': 'config',
+  '自动化操控': 'auto',
+  '解析数据': 'parse',
+  '下载图片': 'image',
+  '保存数据': 'save',
+  // 网页爬虫的步骤
+  '移动端 API': 'auto',
+  'Web API': 'auto',
+  'Puppeteer': 'auto'
+};
+
+function initScrapePanel() {
+  const panel = document.getElementById('scrapePanel');
+  const stepsEl = document.getElementById('scrapeSteps');
+  const body = document.getElementById('scrapeConsoleBody');
+  const toggle = document.getElementById('scrapeConsoleToggle');
+
+  if (!panel || !stepsEl) return;
+
+  // 渲染步骤
+  stepsEl.innerHTML = SCRAPE_STEPS.map(s => `
+    <div class="scrape-step" id="step-${s.id}">
+      <span class="scrape-step-icon">${s.icon}</span>
+      <span class="scrape-step-text">${s.label}</span>
+    </div>
+  `).join('');
+
+  // 清空日志
+  if (body) body.innerHTML = '';
+
+  // 控制台折叠
+  if (toggle) {
+    toggle.onclick = () => {
+      scrapeConsoleExpanded = !scrapeConsoleExpanded;
+      const arrow = document.getElementById('scrapeConsoleArrow');
+      if (body) body.classList.toggle('collapsed', !scrapeConsoleExpanded);
+      if (arrow) arrow.textContent = scrapeConsoleExpanded ? '▲' : '▼';
+    };
+  }
+}
+
+function updateScrapeStep(stepName) {
+  const stepId = STEP_NAME_MAP[stepName];
+  if (!stepId) return;
+
+  // 标记之前的步骤为完成
+  let foundCurrent = false;
+  for (const s of SCRAPE_STEPS) {
+    const el = document.getElementById(`step-${s.id}`);
+    if (!el) continue;
+    if (s.id === stepId) {
+      el.className = 'scrape-step active';
+      foundCurrent = true;
+    } else if (!foundCurrent) {
+      el.className = 'scrape-step done';
+      el.querySelector('.scrape-step-icon').textContent = '✓';
+    } else {
+      el.className = 'scrape-step';
+    }
+  }
+}
+
+function appendScrapeLog(text, level) {
+  const body = document.getElementById('scrapeConsoleBody');
+  if (!body) return;
+  const line = document.createElement('div');
+  line.className = 'scrape-log-line' + (level === 'error' ? ' error' : level === 'warn' ? ' warn' : '');
+  line.textContent = text;
+  body.appendChild(line);
+  body.scrollTop = body.scrollHeight;
+}
+
+function updateScrapeProgress(percent, stepText) {
+  const fill = document.getElementById('scrapeProgressFill');
+  const label = document.getElementById('scrapeProgressPercent');
+  const step = document.getElementById('scrapeProgressStep');
+  if (fill) fill.style.width = percent + '%';
+  if (label) label.textContent = percent + '%';
+  if (step && stepText) step.textContent = stepText;
+}
+
+function setScrapePanelState(state) {
+  const panel = document.getElementById('scrapePanel');
+  const spinner = document.getElementById('scrapeSpinner');
+  const status = document.getElementById('scrapePanelStatus');
+  const title = document.getElementById('scrapePanelTitle');
+  const btn = document.getElementById('scrapeBtnEmpty');
+
+  if (!panel) return;
+
+  panel.style.display = 'block';
+  if (btn) btn.style.display = 'none';
+
+  if (state === 'running') {
+    if (spinner) spinner.style.display = 'block';
+    if (status) { status.className = 'scrape-panel-status running'; status.textContent = '运行中'; }
+    if (title) title.textContent = '抓取中';
+  } else if (state === 'done') {
+    if (spinner) spinner.style.display = 'none';
+    if (status) { status.className = 'scrape-panel-status done'; status.textContent = '完成'; }
+    if (title) title.textContent = '抓取完成';
+    if (btn) { btn.style.display = 'flex'; btn.disabled = false; }
+    // 标记所有步骤完成
+    SCRAPE_STEPS.forEach(s => {
+      const el = document.getElementById(`step-${s.id}`);
+      if (el) { el.className = 'scrape-step done'; el.querySelector('.scrape-step-icon').textContent = '✓'; }
+    });
+  } else if (state === 'error') {
+    if (spinner) spinner.style.display = 'none';
+    if (status) { status.className = 'scrape-panel-status error'; status.textContent = '失败'; }
+    if (title) title.textContent = '抓取出错';
+    if (btn) { btn.style.display = 'flex'; btn.disabled = false; }
+  }
+}
+
 // 开始抓取
 async function startScrape() {
   const btn = this;
   btn.disabled = true;
-  setScrapeStatusVisible(true);
+
+  // 获取数据源选择
+  const sourceSelect = document.getElementById('scrapeSource');
+  const source = sourceSelect ? sourceSelect.value : 'emulator';
+
+  // 初始化并显示进度面板
+  initScrapePanel();
+  setScrapePanelState('running');
 
   try {
     const response = await fetch('/api/products/scrape', {
-      method: 'POST'
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source })
     });
 
     const data = await response.json();
 
-    if (data.success) {
-      showToast('success', data.message);
-      // 3秒后刷新页面
-      setTimeout(() => {
-        window.location.reload();
-      }, 3000);
-    } else {
+    if (!data.success) {
       showToast('error', data.message);
+      setScrapePanelState('error');
+      btn.disabled = false;
+      return;
     }
+
+    // 连接 SSE 接收实时进度
+    console.log('[Scrape] POST成功，准备连接SSE');
+    connectScrapeSSE();
+    console.log('[Scrape] SSE连接已发起');
+
   } catch (err) {
     showToast('error', '抓取失败: ' + err.message);
-  } finally {
+    setScrapePanelState('error');
     btn.disabled = false;
-    setScrapeStatusVisible(false);
   }
+}
+
+function connectScrapeSSE() {
+  if (scrapeEventSource) {
+    scrapeEventSource.close();
+  }
+
+  scrapeEventSource = new EventSource('/api/products/scrape/stream');
+
+  scrapeEventSource.onmessage = function(event) {
+    try {
+      const data = JSON.parse(event.data);
+      console.log('[SSE收到]', JSON.stringify(data).slice(0, 200));
+
+      if (data.type === 'log') {
+        appendScrapeLog(data.message, data.level);
+      } else if (data.type === 'step') {
+        updateScrapeStep(data.name);
+        updateScrapeProgress(Math.round(data.percent || 0), data.detail || data.name);
+      } else if (data.type === 'progress') {
+        updateScrapeProgress(data.percent);
+      } else if (data.type === 'done') {
+        setScrapePanelState('done');
+        appendScrapeLog('✓ ' + (data.message || '完成'), 'success');
+        showToast('success', data.message || '抓取完成');
+        scrapeEventSource.close();
+        scrapeEventSource = null;
+        setTimeout(() => window.location.reload(), 3000);
+      } else if (data.type === 'error') {
+        setScrapePanelState('error');
+        appendScrapeLog('✗ ' + (data.message || '失败'), 'error');
+        showToast('error', data.message || '抓取失败');
+        scrapeEventSource.close();
+        scrapeEventSource = null;
+      } else if (data.done) {
+        scrapeEventSource.close();
+        scrapeEventSource = null;
+      } else if (data.status === 'done' || data.status === 'error') {
+        setScrapePanelState(data.status);
+        if (data.logs) {
+          data.logs.forEach(function(log) { appendScrapeLog(log.message, log.level); });
+        }
+        scrapeEventSource.close();
+        scrapeEventSource = null;
+        if (data.status === 'done') {
+          setTimeout(() => window.location.reload(), 3000);
+        }
+      } else if (data.status === 'running' || data.active) {
+        // SSE 连接建立时收到初始状态，回放缓冲的 logs/steps/progress
+        if (data.logs && data.logs.length) {
+          data.logs.forEach(function(log) { appendScrapeLog(log.message, log.level); });
+        }
+        if (data.currentStep) {
+          updateScrapeStep(data.currentStep);
+        }
+        if (data.percent != null) {
+          updateScrapeProgress(data.percent, data.currentStep || '处理中...');
+        }
+      }
+    } catch (e) {
+      console.error('[SSE解析错误]', e);
+    }
+  };
+
+  scrapeEventSource.onerror = function() {
+    // SSE 连接错误，不立即关闭，等待重连
+    // 如果已经在运行，忽略错误
+  };
 }
 
 // 生成内容（异步任务 + 轮询日志）

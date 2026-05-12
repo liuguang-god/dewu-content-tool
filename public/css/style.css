@@ -283,6 +283,222 @@ a:hover {
   display: block;
 }
 
+/* ── Scrape Progress Panel ── */
+.scrape-panel {
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.scrape-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+
+.scrape-panel-title {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--fg);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.scrape-panel-title .spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.scrape-panel-status {
+  font-size: 10.5px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 20px;
+  letter-spacing: 0.02em;
+}
+
+.scrape-panel-status.running {
+  background: oklch(58% 0.18 255 / 0.1);
+  color: var(--accent);
+}
+
+.scrape-panel-status.done {
+  background: oklch(60% 0.15 145 / 0.1);
+  color: var(--success);
+}
+
+.scrape-panel-status.error {
+  background: oklch(60% 0.15 25 / 0.1);
+  color: oklch(55% 0.18 25);
+}
+
+/* Step indicators */
+.scrape-steps {
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.scrape-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--muted);
+  transition: color 0.2s;
+}
+
+.scrape-step.active {
+  color: var(--fg);
+  font-weight: 500;
+}
+
+.scrape-step.done {
+  color: var(--success);
+}
+
+.scrape-step-icon {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  flex-shrink: 0;
+  background: var(--bg);
+  border: 1.5px solid var(--border);
+  transition: all 0.2s;
+}
+
+.scrape-step.active .scrape-step-icon {
+  background: var(--accent-light);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.scrape-step.done .scrape-step-icon {
+  background: var(--success);
+  border-color: var(--success);
+  color: white;
+}
+
+.scrape-step-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.scrape-step-detail {
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 1px;
+}
+
+/* Progress bar */
+.scrape-progress-bar {
+  padding: 0 14px 10px;
+}
+
+.scrape-progress-track {
+  height: 4px;
+  background: var(--bg);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.scrape-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), oklch(60% 0.15 145));
+  border-radius: 2px;
+  transition: width 0.4s ease;
+  width: 0%;
+}
+
+.scrape-progress-label {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 4px;
+  font-size: 10px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Log console */
+.scrape-console {
+  border-top: 1px solid var(--border);
+  background: #1e1e1e;
+  overflow: hidden;
+}
+
+.scrape-console-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  background: #252526;
+  border-bottom: 1px solid #3c3c3c;
+  cursor: pointer;
+  user-select: none;
+}
+
+.scrape-console-title {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: #cccccc;
+}
+
+.scrape-console-toggle {
+  font-size: 10px;
+  color: #858585;
+}
+
+.scrape-console-body {
+  max-height: 120px;
+  overflow-y: auto;
+  padding: 8px 12px;
+  font-family: ui-monospace, 'Cascadia Code', 'SF Mono', Consolas, monospace;
+  font-size: 10.5px;
+  line-height: 1.5;
+  transition: max-height 0.3s ease;
+}
+
+.scrape-console-body.collapsed {
+  max-height: 0;
+  padding: 0 12px;
+}
+
+.scrape-log-line {
+  color: #ce9178;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.scrape-log-line.warn {
+  color: #dcdcaa;
+}
+
+.scrape-log-line.error {
+  color: #f44747;
+}
+
+.scrape-log-line.success {
+  color: #6a9955;
+}
+
 .scrape-status .dot {
   display: inline-block;
   width: 6px;
@@ -291,6 +507,15 @@ a:hover {
   background: var(--accent);
   margin-right: 5px;
   animation: pulse 1.2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 .generation-console {

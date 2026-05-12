@@ -4,6 +4,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { productQueries } = require('../db/queries');
 const { getAllKeywords, inferCategoryFromName, getAllCategoryKeys } = require('../config/categories');
+const { scrapeProgress } = require('./progress');
 
 // User-Agent 列表
 const USER_AGENTS = [
@@ -52,25 +53,49 @@ function escapeXml(text) {
     .replaceAll("'", '&apos;');
 }
 
-function buildPlaceholderSvg(productName) {
+// 品类占位图配色方案
+const CATEGORY_PLACEHOLDER = {
+  sneakers: { bg: '#FFF3E0', accent: '#E65100', icon: '👟', label: '球鞋' },
+  clothing: { bg: '#E8F5E9', accent: '#2E7D32', icon: '👔', label: '服饰' },
+  beauty:   { bg: '#FCE4EC', accent: '#C62828', icon: '💄', label: '美妆' },
+  plush:    { bg: '#F3E5F5', accent: '#6A1B9A', icon: '🧸', label: '毛绒' },
+  blindbox: { bg: '#E3F2FD', accent: '#1565C0', icon: '📦', label: '盲盒' },
+};
+const DEFAULT_PLACEHOLDER = { bg: '#F5F5F5', accent: '#616161', icon: '🏷️', label: '商品' };
+
+function buildPlaceholderSvg(productName, category) {
   const title = escapeXml(productName || 'Product');
+  const ph = CATEGORY_PLACEHOLDER[category] || DEFAULT_PLACEHOLDER;
+  const icon = ph.icon;
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600">
-  <rect width="600" height="600" fill="#f2f4f7"/>
-  <rect x="140" y="160" width="320" height="320" rx="26" fill="#d8dde6"/>
-  <path d="M210 350l55-55 35 35 60-60 80 80v55H210z" fill="#b7c0cf"/>
-  <circle cx="255" cy="290" r="24" fill="#b7c0cf"/>
-  <text x="300" y="510" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" fill="#6b7280">${title}</text>
+  <rect width="600" height="600" fill="${ph.bg}"/>
+  <rect x="80" y="80" width="440" height="400" rx="20" fill="white" opacity="0.6"/>
+  <text x="300" y="300" text-anchor="middle" dominant-baseline="central" font-size="120">${icon}</text>
+  <text x="300" y="520" text-anchor="middle" font-family="'PingFang SC','Microsoft YaHei',Arial,sans-serif" font-size="20" font-weight="600" fill="${ph.accent}">${title}</text>
+  <text x="300" y="555" text-anchor="middle" font-family="'PingFang SC','Microsoft YaHei',Arial,sans-serif" font-size="14" fill="#999">${ph.label} · 得物</text>
 </svg>`;
 }
 
-async function downloadProductImage({ imageUrl, productUrl, productName, userAgent, timeoutMs, outputDirAbs }) {
+async function downloadProductImage({ imageUrl, productUrl, productName, category, userAgent, timeoutMs, outputDirAbs }) {
   if (!productUrl) return null;
 
   ensureDirSync(outputDirAbs);
 
+  // 如果没有图片 URL，直接生成本地占位图
+  if (!imageUrl) {
+    const fileName = `${sha1(productUrl)}.svg`;
+    const filePathAbs = path.join(outputDirAbs, fileName);
+    try {
+      fs.writeFileSync(filePathAbs, buildPlaceholderSvg(productName, category));
+      return `/images/products/${fileName}`;
+    } catch (writeErr) {
+      console.log('占位图写入失败:', writeErr?.message || writeErr);
+      return null;
+    }
+  }
+
   try {
-    if (!imageUrl) throw new Error('缺少 imageUrl');
 
     const response = await axios.get(imageUrl, {
       responseType: 'arraybuffer',
@@ -91,12 +116,11 @@ async function downloadProductImage({ imageUrl, productUrl, productName, userAge
     // 返回对外可访问的静态路径（Express static: public/）
     return `/images/products/${fileName}`;
   } catch (err) {
-    // 为什么：外链图片可能被墙/被限流/临时 502；确保列表始终有图，避免前端反复报错。
     console.log('图片下载失败，改用本地占位图:', err?.message || err);
     const fileName = `${sha1(productUrl)}.svg`;
     const filePathAbs = path.join(outputDirAbs, fileName);
     try {
-      fs.writeFileSync(filePathAbs, buildPlaceholderSvg(productName));
+      fs.writeFileSync(filePathAbs, buildPlaceholderSvg(productName, category));
       return `/images/products/${fileName}`;
     } catch (writeErr) {
       console.log('占位图写入失败:', writeErr?.message || writeErr);
@@ -125,6 +149,213 @@ async function mapWithConcurrency(items, concurrency, mapper) {
 
 // 品类对应的搜索关键词（从集中配置读取）
 const CATEGORY_KEYWORDS = getAllKeywords();
+
+/**
+ * 使用 Puppeteer 从得物搜索页面抓取商品数据
+ * 得物是 SPA，普通 HTTP 请求拿不到数据，需要浏览器渲染
+ */
+async function scrapeWithPuppeteer(keyword, maxItems = 20) {
+  let browser;
+  try {
+    const puppeteer = require('puppeteer');
+    browser = await puppeteer.launch({
+      headless: 'new',
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-blink-features=AutomationControlled'
+      ]
+    });
+
+    const page = await browser.newPage();
+    await page.setUserAgent(getRandomUA());
+    await page.setViewport({ width: 1440, height: 900 });
+
+    // 反检测：隐藏 webdriver 标识
+    await page.evaluateOnNewDocument(() => {
+      Object.defineProperty(navigator, 'webdriver', { get: () => false });
+    });
+
+    // 拦截 API 请求，直接获取 JSON 数据
+    const apiProducts = [];
+    page.on('response', async (response) => {
+      const url = response.url();
+      if (url.includes('/api/') && url.includes('search') || url.includes('goods') || url.includes('spu')) {
+        try {
+          const contentType = response.headers()['content-type'] || '';
+          if (contentType.includes('application/json')) {
+            const json = await response.json();
+            // 尝试从各种可能的数据结构中提取商品
+            const items = json?.data?.list || json?.data?.goodsList || json?.data?.items ||
+                         json?.data?.spuList || json?.data?.resultList || [];
+            for (const item of items) {
+              const name = item.spuName || item.name || item.title || '';
+              const price = Number(item.price || item.minPrice || item.activityPrice || 0) / 100 || 0;
+              const imageUrl = item.mainPic || item.image || item.picUrl || item.coverUrl || '';
+              const id = item.spuId || item.id || item.goodsId || '';
+              const brandName = item.brandName || item.brand || '';
+
+              if (name) {
+                apiProducts.push({
+                  name,
+                  category: inferCategoryFromName(name + ' ' + brandName) || 'plush',
+                  price: price || null,
+                  imageUrl,
+                  productUrl: id ? `https://www.dewu.com/product/detail/${id}` : '',
+                  hotScore: 80 + Math.floor(Math.random() * 20)
+                });
+              }
+            }
+          }
+        } catch (_) { /* ignore parse errors */ }
+      }
+    });
+
+    // 访问得物搜索页面
+    const searchUrl = `https://www.dewu.com/search/result?keyword=${encodeURIComponent(keyword)}`;
+    console.log(`  打开搜索页面: ${searchUrl}`);
+    let captchaDetected = false;
+    page.on('response', (response) => {
+      if (response.url().includes('captcha')) {
+        captchaDetected = true;
+      }
+    });
+    await page.goto(searchUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+
+    // 等待页面渲染
+    await sleep(3000);
+
+    // 检测验证码
+    if (captchaDetected) {
+      console.log('检测到验证码，跳过此关键词');
+      return [];
+    }
+
+    // 如果拦截 API 没拿到数据，尝试从页面 DOM 提取
+    if (apiProducts.length === 0) {
+      console.log('  API 拦截未获取数据，尝试从页面 DOM 提取...');
+      const domProducts = await page.evaluate(() => {
+        const items = [];
+        // 尝试多种选择器
+        const cards = document.querySelectorAll('[class*="goods-card"], [class*="product-card"], [class*="spu-card"], a[href*="/product/"]');
+        cards.forEach(card => {
+          const nameEl = card.querySelector('[class*="name"], [class*="title"], h3, h4');
+          const priceEl = card.querySelector('[class*="price"]');
+          const imgEl = card.querySelector('img');
+          const linkEl = card.closest('a') || card.querySelector('a');
+
+          const name = nameEl?.textContent?.trim() || '';
+          const priceText = priceEl?.textContent?.trim() || '';
+          const price = Number(priceText.replace(/[^0-9.]/g, '')) || null;
+          const imageUrl = imgEl?.src || imgEl?.getAttribute('data-src') || '';
+          const href = linkEl?.href || '';
+
+          if (name) {
+            items.push({ name, price, imageUrl, href });
+          }
+        });
+        return items;
+      });
+
+      for (const item of domProducts) {
+        apiProducts.push({
+          name: item.name,
+          category: inferCategoryFromName(item.name) || 'plush',
+          price: item.price,
+          imageUrl: item.imageUrl,
+          productUrl: item.href || '',
+          hotScore: 80 + Math.floor(Math.random() * 20)
+        });
+      }
+    }
+
+    // 如果还是没有，截个图方便调试
+    if (apiProducts.length === 0) {
+      const screenshotPath = path.join(__dirname, '../../debug-dewu.png');
+      await page.screenshot({ path: screenshotPath, fullPage: true });
+      console.log(`  未能提取商品数据，已保存截图到 ${screenshotPath}`);
+    }
+
+    return apiProducts.slice(0, maxItems);
+  } catch (err) {
+    console.log(`  Puppeteer 抓取失败: ${err.message}`);
+    return [];
+  } finally {
+    if (browser) await browser.close();
+  }
+}
+
+/**
+ * 尝试通过得物移动端 H5 API 搜索
+ */
+async function scrapeWithMobileApi(keyword, maxItems = 10) {
+  try {
+    const response = await axios.get('https://app.dewu.com/api/v1/h5/search/goods/search', {
+      params: { keyword, page: 1, pageSize: maxItems },
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X)',
+        'Accept': 'application/json',
+        'Referer': 'https://www.dewu.com/'
+      },
+      timeout: 8000
+    });
+
+    const data = response.data;
+    if (!data) return [];
+
+    const items = data?.data?.list || data?.data?.goodsList || data?.data?.items ||
+                  data?.data?.spuList || data?.data?.resultList || [];
+    if (!Array.isArray(items) || items.length === 0) return [];
+
+    return items.slice(0, maxItems).map(item => ({
+      name: item.spuName || item.name || item.title || '',
+      category: inferCategoryFromName(item.spuName || item.name || '') || 'plush',
+      price: Number(item.price || item.minPrice || item.activityPrice || 0) / 100 || null,
+      imageUrl: item.mainPic || item.image || item.picUrl || item.coverUrl || '',
+      productUrl: item.spuId ? `https://www.dewu.com/product/detail/${item.spuId}` : '',
+      hotScore: 80 + Math.floor(Math.random() * 20)
+    })).filter(p => p.name);
+  } catch (_) {
+    return [];
+  }
+}
+
+/**
+ * 尝试通过得物 API 直接搜索（不依赖 Puppeteer）
+ */
+async function scrapeWithApi(keyword, maxItems = 20) {
+  try {
+    // 得物搜索 API
+    const response = await axios.get('https://www.dewu.com/search/result', {
+      params: { keyword },
+      headers: {
+        'User-Agent': getRandomUA(),
+        'Accept': 'text/html,application/xhtml+xml',
+        'Accept-Language': 'zh-CN,zh;q=0.9'
+      },
+      timeout: 10000
+    });
+
+    // 尝试从 HTML 中提取 JSON 数据（Next.js SSR）
+    const html = String(response.data || '');
+    const nextDataMatch = html.match(/<script id="__NEXT_DATA__"[^>]*>(.*?)<\/script>/s);
+    if (nextDataMatch) {
+      const nextData = JSON.parse(nextDataMatch[1]);
+      const goodsList = nextData?.props?.pageProps?.goodsList ||
+                       nextData?.props?.pageProps?.searchResult?.list || [];
+      return goodsList.slice(0, maxItems).map(item => ({
+        name: item.spuName || item.name || '',
+        category: inferCategoryFromName(item.spuName || item.name || '') || 'plush',
+        price: Number(item.price || 0) / 100 || null,
+        imageUrl: item.mainPic || item.image || '',
+        productUrl: item.spuId ? `https://www.dewu.com/product/detail/${item.spuId}` : '',
+        hotScore: 80 + Math.floor(Math.random() * 20)
+      }));
+    }
+  } catch (_) { /* ignore */ }
+  return [];
+}
 
 // 模拟商品数据（用于测试）
 function generateMockProducts() {
@@ -165,7 +396,7 @@ function generateMockProducts() {
     name: p.name,
     category: p.category,
     price: p.price,
-    imageUrl: `https://via.placeholder.com/300x300?text=${encodeURIComponent(p.name)}`,
+    imageUrl: null,
     localImagePath: null,
     productUrl: `https://www.dewu.com/product/${1000 + i}`,
     hotScore: p.hotScore
@@ -173,10 +404,10 @@ function generateMockProducts() {
 }
 
 async function scrapeAll(options = {}) {
-  console.log('开始获取商品数据...');
+  const progress = options.progress || scrapeProgress;
+  progress.log('开始获取商品数据...');
 
   try {
-    // 尝试从得物API获取数据，如果失败则使用模拟数据
     let products = [];
     const keepDays = Number.isFinite(options.keepDays) ? Math.max(1, Math.floor(options.keepDays)) : 7;
     const maxItems = Number.isFinite(options.maxItems) ? Math.max(1, Math.floor(options.maxItems)) : 200;
@@ -185,44 +416,83 @@ async function scrapeAll(options = {}) {
     const imageTimeoutMs = Number.isFinite(options.imageTimeoutMs) ? Math.max(1000, Math.floor(options.imageTimeoutMs)) : 12000;
     const publicImagesDirAbs = path.join(__dirname, '../../public/images/products');
 
-    try {
-      // 得物搜索API (可能需要调整)
-      const response = await axios.get('https://www.dewu.com/search/hot', {
-        headers: { 'User-Agent': getRandomUA() },
-        timeout: 10000
-      });
-
-      // 如果API成功，解析数据
-      if (response.data && response.data.data) {
-        products = response.data.data.map(item => ({
-          name: item.title || item.name,
-          category: inferCategoryFromName(item.title || item.name) || item.category || 'plush',
-          price: item.price,
-          imageUrl: item.image,
-          localImagePath: null,
-          productUrl: item.url || `https://www.dewu.com/product/${item.id}`,
-          hotScore: item.hot_score || 80
-        })).slice(0, maxItems);
+    // 策略：移动端API → Web API（前3关键词）→ Puppeteer（前3关键词）→ 模拟数据
+    const allKeywords = [];
+    for (const [cat, kws] of Object.entries(CATEGORY_KEYWORDS)) {
+      for (const kw of kws.slice(0, 2)) {
+        allKeywords.push({ keyword: kw, category: cat });
       }
-    } catch (apiErr) {
-      console.log('得物API不可用，使用模拟数据:', apiErr.message);
     }
 
-    // 如果没有获取到数据，使用模拟数据
-    if (products.length === 0) {
-      console.log('使用模拟商品数据进行测试...');
+    progress.log(`将搜索 ${allKeywords.length} 个关键词`);
+
+    // 第一步：尝试移动端 API
+    progress.step('移动端 API', '通过 H5 接口搜索商品');
+    progress.setProgress(10, 100);
+    progress.log('尝试移动端 API 搜索...');
+    for (const { keyword } of allKeywords.slice(0, 3)) {
+      if (products.length >= maxItems) break;
+      progress.log(`  移动端 API 搜索: ${keyword}`);
+      const found = await scrapeWithMobileApi(keyword, 10);
+      products.push(...found);
+      await sleep(500);
+    }
+
+    // 第二步：API 数据不足，尝试 Web API
+    if (products.length < 3) {
+      progress.step('Web API', '通过网页 API 搜索商品');
+      progress.setProgress(30, 100);
+      progress.log('移动端 API 数据不足，尝试 Web API 搜索...');
+      for (const { keyword } of allKeywords.slice(0, 3)) {
+        if (products.length >= maxItems) break;
+        progress.log(`  Web API 搜索: ${keyword}`);
+        const found = await scrapeWithApi(keyword, 10);
+        products.push(...found);
+        await sleep(500);
+      }
+    }
+
+    // 第三步：仍然不足，用 Puppeteer 抓取
+    if (products.length < 3) {
+      progress.step('Puppeteer', '使用浏览器引擎抓取');
+      progress.setProgress(50, 100);
+      progress.log('Web API 数据不足，尝试使用 Puppeteer 抓取...');
+      for (const { keyword } of allKeywords.slice(0, 3)) {
+        if (products.length >= maxItems) break;
+        progress.log(`  Puppeteer 搜索: ${keyword}`);
+        const found = await scrapeWithPuppeteer(keyword, 10);
+        products.push(...found);
+        await sleep(1000);
+      }
+    }
+
+    // 去重
+    const seen = new Set();
+    products = products.filter(p => {
+      if (!p.name || seen.has(p.name)) return false;
+      seen.add(p.name);
+      return true;
+    }).slice(0, maxItems);
+
+    // 如果获取到的数据太少，使用模拟数据补充
+    if (products.length < 3) {
+      progress.log('真实数据不足（<3），使用模拟商品数据进行测试...');
       products = generateMockProducts().slice(0, maxItems);
     }
 
+    progress.log(`共获取 ${products.length} 个商品`);
+
     if (downloadImages) {
-      console.log(`开始下载商品图片到本地缓存（并发 ${imageConcurrency}）...`);
+      progress.step('下载图片', '下载商品图片到本地');
+      progress.setProgress(70, 100);
+      progress.log(`开始下载商品图片到本地缓存（并发 ${imageConcurrency}）...`);
       const enriched = await mapWithConcurrency(products, imageConcurrency, async (p) => {
-        // 控制请求节奏，避免触发目标站点风控（即使是外链图也不要打太猛）
         await sleep(200 + Math.floor(Math.random() * 500));
         const localImagePath = await downloadProductImage({
           imageUrl: p.imageUrl,
           productUrl: p.productUrl,
           productName: p.name,
+          category: p.category,
           userAgent: getRandomUA(),
           timeoutMs: imageTimeoutMs,
           outputDirAbs: publicImagesDirAbs
@@ -233,14 +503,18 @@ async function scrapeAll(options = {}) {
     }
 
     // 保存到数据库
+    progress.step('保存数据', '写入数据库');
+    progress.setProgress(90, 100);
     await productQueries.insertMany(products);
     await productQueries.deleteOlderThanDays(keepDays);
-    console.log(`\n成功获取 ${products.length} 个商品`);
+
+    progress.setProgress(100, 100);
+    progress.succeed(`成功获取 ${products.length} 个商品`);
 
     return products;
 
   } catch (err) {
-    console.error('抓取失败:', err.message);
+    progress.fail('抓取失败: ' + err.message);
     throw err;
   }
 }

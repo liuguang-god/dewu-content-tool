@@ -1,7 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const { productQueries, contentQueries } = require('../db/queries');
-const { scrapeAll } = require('../scraper/dewu');
+const { scrapeAll: webScrapeAll } = require('../scraper/dewu');
+const { scrapeAll: emulatorScrapeAll } = require('../scraper/emulator');
+const { scrapeProgress } = require('../scraper/progress');
 
 // 获取商品列表 (API)
 router.get('/', async (req, res) => {
@@ -59,18 +61,39 @@ router.get('/:id', async (req, res) => {
 // 触发爬虫
 router.post('/scrape', async (req, res) => {
   try {
-    // 异步执行爬虫：只保留最近一周，避免一次抓取过多导致页面资源请求风暴
-    scrapeAll({
+    const source = req.body?.source || req.query?.source || 'emulator';
+    const scrapeFn = source === 'emulator' ? emulatorScrapeAll : webScrapeAll;
+    const sourceLabel = source === 'emulator' ? '模拟器' : '网页';
+
+    // 如果已有爬虫在运行，拒绝
+    if (scrapeProgress.active) {
+      return res.json({
+        success: false,
+        message: '已有爬虫任务正在运行，请等待完成'
+      });
+    }
+
+    console.log(`爬虫任务启动，数据源: ${sourceLabel}`);
+
+    // 初始化进度
+    scrapeProgress.start(source);
+
+    // 异步执行爬虫
+    scrapeFn({
       keepDays: 7,
       maxItems: 200,
       downloadImages: true,
       imageConcurrency: 4,
-      imageTimeoutMs: 12000
-    }).catch(err => console.error('爬虫错误:', err));
+      imageTimeoutMs: 12000,
+      progress: scrapeProgress
+    }).catch(err => {
+      console.error('爬虫错误:', err);
+      scrapeProgress.fail('爬虫异常: ' + err.message);
+    });
 
     res.json({
       success: true,
-      message: '爬虫任务已启动，请稍后刷新查看结果'
+      message: `${sourceLabel}爬虫任务已启动`
     });
   } catch (err) {
     res.status(500).json({
@@ -78,6 +101,72 @@ router.post('/scrape', async (req, res) => {
       message: '爬虫启动失败: ' + err.message
     });
   }
+});
+
+// SSE 实时进度流
+router.get('/scrape/stream', (req, res) => {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no'
+  });
+
+  // 发送当前状态
+  res.write(`data: ${JSON.stringify(scrapeProgress.toJSON())}\n\n`);
+
+  // 如果已完成，直接关闭
+  if (!scrapeProgress.active && scrapeProgress.status !== 'idle') {
+    res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+    res.end();
+    return;
+  }
+
+  // 监听事件
+  console.log(`[SSE] 客户端连接，当前状态: active=${scrapeProgress.active}, status=${scrapeProgress.status}, logs=${scrapeProgress.logs.length}`);
+  const onLog = (entry) => {
+    console.log(`[SSE] 推送 log: ${entry.message}`);
+    res.write(`data: ${JSON.stringify({ type: 'log', ...entry })}\n\n`);
+  };
+  const onStep = (step) => {
+    console.log(`[SSE] 推送 step: ${step.name}`);
+    res.write(`data: ${JSON.stringify({ type: 'step', ...step })}\n\n`);
+  };
+  const onProgress = (p) => {
+    console.log(`[SSE] 推送 progress: ${p.percent}%`);
+    res.write(`data: ${JSON.stringify({ type: 'progress', ...p })}\n\n`);
+  };
+  const onDone = (result) => {
+    res.write(`data: ${JSON.stringify({ type: 'done', ...result })}\n\n`);
+    cleanup();
+  };
+  const onError = (err) => {
+    res.write(`data: ${JSON.stringify({ type: 'error', ...err })}\n\n`);
+    cleanup();
+  };
+
+  function cleanup() {
+    scrapeProgress.removeListener('log', onLog);
+    scrapeProgress.removeListener('step', onStep);
+    scrapeProgress.removeListener('progress', onProgress);
+    scrapeProgress.removeListener('done', onDone);
+    scrapeProgress.removeListener('error', onError);
+    res.end();
+  }
+
+  scrapeProgress.on('log', onLog);
+  scrapeProgress.on('step', onStep);
+  scrapeProgress.on('progress', onProgress);
+  scrapeProgress.on('done', onDone);
+  scrapeProgress.on('error', onError);
+
+  // 客户端断开时清理
+  req.on('close', cleanup);
+});
+
+// 获取当前爬虫状态
+router.get('/scrape/status', (req, res) => {
+  res.json(scrapeProgress.toJSON());
 });
 
 module.exports = router;

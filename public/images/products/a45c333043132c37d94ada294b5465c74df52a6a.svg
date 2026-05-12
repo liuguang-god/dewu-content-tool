@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600">
-  <rect width="600" height="600" fill="#f2f4f7"/>
-  <rect x="140" y="160" width="320" height="320" rx="26" fill="#d8dde6"/>
-  <path d="M210 350l55-55 35 35 60-60 80 80v55H210z" fill="#b7c0cf"/>
-  <circle cx="255" cy="290" r="24" fill="#b7c0cf"/>
-  <text x="300" y="510" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" fill="#6b7280">YSL 小金条 21号</text>
+  <rect width="600" height="600" fill="#FCE4EC"/>
+  <rect x="80" y="80" width="440" height="400" rx="20" fill="white" opacity="0.6"/>
+  <text x="300" y="300" text-anchor="middle" dominant-baseline="central" font-size="120">💄</text>
+  <text x="300" y="520" text-anchor="middle" font-family="'PingFang SC','Microsoft YaHei',Arial,sans-serif" font-size="20" font-weight="600" fill="#C62828">YSL 小金条 21号</text>
+  <text x="300" y="555" text-anchor="middle" font-family="'PingFang SC','Microsoft YaHei',Arial,sans-serif" font-size="14" fill="#999">美妆 · 得物</text>
 </svg>
