@@ -199,12 +199,20 @@ class ADBController {
   }
 
   /**
-   * 清空输入框：Ctrl+A 全选 + Delete 删除
-   * 不内部 sleep，由调用方通过 await sleep 控制时序
+   * 清空输入框：先移到末尾，再 Shift+Home 全选，Delete 删除
+   * 最后补发 50 次 DEL 兜底（兼容自定义输入框不支持全选的情况）
    */
   clearInput() {
-    this.exec('shell input keyevent 29 --longpress'); // Ctrl+A
-    this.exec('shell input keyevent 67'); // Delete
+    // 移动光标到末尾
+    this.exec('shell input keyevent 123'); // KEYCODE_MOVE_END
+    // Shift+Home 全选
+    this.exec('shell input keyevent 59 122'); // KEYCODE_SHIFT_LEFT + KEYCODE_MOVE_HOME
+    // 删除选中文本
+    this.exec('shell input keyevent 67'); // KEYCODE_DEL
+    // 兜底：连续发送 DEL，确保清干净
+    for (let i = 0; i < 50; i++) {
+      this.exec('shell input keyevent 67');
+    }
   }
 
   /**

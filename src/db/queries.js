@@ -42,9 +42,9 @@ const productQueries = {
   async insert(product) {
     const db = await getReadyDb();
     db.run(
-      `INSERT INTO products (name, category, price, image_url, local_image_path, product_url, hot_score)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [product.name, product.category, product.price, product.imageUrl, product.localImagePath, product.productUrl, product.hotScore]
+      `INSERT INTO products (name, category, price, image_url, local_image_path, product_url, hot_score, source_channel)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [product.name, product.category, product.price, product.imageUrl, product.localImagePath, product.productUrl, product.hotScore, product.sourceChannel || '']
     );
     const id = db.exec("SELECT last_insert_rowid()")[0].values[0][0];
     saveDb();
@@ -58,8 +58,8 @@ const productQueries = {
       try {
         // 为什么：我们用 product_url 去重；重复抓取时需要更新价格/热度/图片路径，而不是忽略写入
         db.run(
-          `INSERT INTO products (name, category, price, image_url, local_image_path, product_url, hot_score)
-           VALUES (?, ?, ?, ?, ?, ?, ?)
+          `INSERT INTO products (name, category, price, image_url, local_image_path, product_url, hot_score, source_channel)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(product_url) DO UPDATE SET
              name = excluded.name,
              category = excluded.category,
@@ -67,8 +67,9 @@ const productQueries = {
              image_url = excluded.image_url,
              local_image_path = COALESCE(excluded.local_image_path, products.local_image_path),
              hot_score = excluded.hot_score,
+             source_channel = CASE WHEN excluded.source_channel != '' THEN excluded.source_channel ELSE products.source_channel END,
              updated_at = CURRENT_TIMESTAMP`,
-          [product.name, product.category, product.price, product.imageUrl, product.localImagePath || null, product.productUrl, product.hotScore]
+          [product.name, product.category, product.price, product.imageUrl, product.localImagePath || null, product.productUrl, product.hotScore, product.sourceChannel || '']
         );
       } catch (e) {
         // 忽略重复
@@ -90,7 +91,7 @@ const productQueries = {
   },
 
   // 获取所有商品（支持分页和筛选）
-  async getAll({ category, status, page = 1, limit = 20 } = {}) {
+  async getAll({ category, status, sourceChannel, page = 1, limit = 20 } = {}) {
     const db = await getReadyDb();
     let sql = 'SELECT * FROM products WHERE 1=1';
     const params = [];
@@ -102,6 +103,10 @@ const productQueries = {
     if (status) {
       sql += ' AND status = ?';
       params.push(status);
+    }
+    if (sourceChannel) {
+      sql += ' AND source_channel = ?';
+      params.push(sourceChannel);
     }
 
     sql += ' ORDER BY hot_score DESC, created_at DESC';
@@ -117,7 +122,7 @@ const productQueries = {
   },
 
   // 获取商品数量
-  async count({ category, status } = {}) {
+  async count({ category, status, sourceChannel } = {}) {
     const db = await getReadyDb();
     let sql = 'SELECT COUNT(*) as count FROM products WHERE 1=1';
     const params = [];
@@ -130,9 +135,26 @@ const productQueries = {
       sql += ' AND status = ?';
       params.push(status);
     }
+    if (sourceChannel) {
+      sql += ' AND source_channel = ?';
+      params.push(sourceChannel);
+    }
 
     const result = await queryOne(sql, params);
     return result ? result.count : 0;
+  },
+
+  // 按来源频道分组计数
+  async channelCounts() {
+    const results = await queryAll(
+      `SELECT source_channel, COUNT(*) as count FROM products
+       WHERE source_channel != '' GROUP BY source_channel`
+    );
+    const counts = {};
+    for (const r of results) {
+      counts[r.source_channel] = r.count;
+    }
+    return counts;
   },
 
   // 更新商品状态

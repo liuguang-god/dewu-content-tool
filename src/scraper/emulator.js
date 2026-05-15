@@ -4,16 +4,119 @@ const path = require('path');
 const { ADBController, DEWU_PACKAGE } = require('./adb');
 const parser = require('./parser');
 const { productQueries } = require('../db/queries');
-const { getAllKeywords, inferCategoryFromName } = require('../config/categories');
+const { CHANNEL_TABS, DEFAULT_CHANNELS, EXPAND_ARROW } = require('../config/channelTabs');
 const { scrapeAll: webScrapeAll } = require('./dewu');
 const { scrapeProgress } = require('./progress');
 
 const PROXY_SCRIPT = path.join(__dirname, 'proxy.py');
 const PROXY_PORT = 8080;
 const CAPTURED_FILE = path.join(__dirname, '../data/captured.json');
+const CHANNEL_STATE_FILE = path.join(__dirname, '../data/channel_state.json');
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * 写入当前频道状态文件，供 proxy.py 读取标记数据来源
+ */
+function setActiveChannel(channelName) {
+  const dataDir = path.join(__dirname, '../data');
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+  }
+  fs.writeFileSync(CHANNEL_STATE_FILE, JSON.stringify({ channel: channelName, timestamp: Date.now() }));
+}
+
+/**
+ * 清除频道状态文件
+ */
+function clearActiveChannel() {
+  try {
+    if (fs.existsSync(CHANNEL_STATE_FILE)) fs.unlinkSync(CHANNEL_STATE_FILE);
+  } catch (_) { /* ignore */ }
+}
+
+/**
+ * 频道浏览自动化：切换得物首页的频道 Tab，滚动浏览抓取数据
+ * @param {ADBController} adb
+ * @param {string[]} channels - 要浏览的频道名称列表
+ */
+async function automateChannelBrowsing(adb, channels) {
+  const progress = scrapeProgress;
+  progress.log('=== 开始频道浏览模式 ===');
+
+  // 1. 启动得物 App
+  progress.log('启动得物 App...');
+  adb.launchDewu();
+  await sleep(5000);
+
+  // 2. 等待 App 到前台
+  const appReady = await adb.waitForApp(DEWU_PACKAGE, 15000);
+  if (!appReady) {
+    progress.log('得物 App 未到前台，尝试继续...');
+  }
+
+  // 3. 确保在首页（点击底部「得物」Tab）
+  progress.log('切换到得物首页...');
+  adb.tap(135, 1870); // 底部「得物」Tab
+  await sleep(3000);
+
+  // 4. 逐个浏览频道
+  // 先点击 ▼ 展开箭头，确保所有频道 Tab 可见
+  if (EXPAND_ARROW) {
+    progress.log('点击展开箭头显示更多频道...');
+    adb.tap(EXPAND_ARROW.x, EXPAND_ARROW.y);
+    await sleep(2000);
+  }
+
+  const totalChannels = channels.length;
+  for (let i = 0; i < channels.length; i++) {
+    const channel = channels[i];
+    const tabCoord = CHANNEL_TABS[channel];
+
+    if (!tabCoord) {
+      progress.log(`[${i + 1}/${totalChannels}] 频道「${channel}」坐标未配置，跳过`);
+      continue;
+    }
+
+    // 更新进度：25% ~ 65% 按频道进度分配
+    const chProgress = 25 + Math.round((i / totalChannels) * 40);
+    progress.setProgress(chProgress, 100);
+    progress.log(`[${i + 1}/${totalChannels}] 切换到频道: ${channel}`);
+
+    try {
+      // 写入频道状态（供 proxy.py 标记）
+      setActiveChannel(channel);
+
+      // 点击频道 Tab
+      adb.tap(tabCoord.x, tabCoord.y);
+      await sleep(4000); // 等待频道内容加载
+
+      // 向下滑动 5 次加载更多内容
+      for (let j = 0; j < 5; j++) {
+        adb.scrollDown(600);
+        await sleep(2000);
+        progress.log(`  ${channel} - 滑动 ${j + 1}/5`);
+      }
+
+      // 滑回顶部
+      for (let j = 0; j < 3; j++) {
+        adb.scrollUp(600);
+        await sleep(500);
+      }
+
+      progress.log(`  频道「${channel}」浏览完成`);
+    } catch (err) {
+      progress.log(`  频道「${channel}」浏览出错: ${err.message}`);
+    }
+  }
+
+  // 5. 清除频道状态
+  clearActiveChannel();
+
+  progress.log('=== 频道浏览完成 ===');
+  return { screenshots: [] };
 }
 
 /**
@@ -435,27 +538,24 @@ async function scrapeAll(options = {}) {
   let products = [];
 
   try {
-    // 5. 自动化操控 App（3 分钟超时保护）
-    progress.step('自动化操控', '启动得物 App，搜索关键词并截图');
+    // 5. 频道浏览自动化（3 分钟超时保护）
+    const channels = options.channels || DEFAULT_CHANNELS;
+    progress.step('自动化操控', '浏览得物首页频道');
     progress.setProgress(25, 100);
-    progress.log('启动得物 App，开始自动化搜索...');
+    progress.log(`开始浏览频道: ${channels.join(', ')}`);
 
-    const AUTOMATION_TIMEOUT_MS = 3 * 60 * 1000; // 3 minutes
-    const automationTask = automateDewuApp(adb);
+    const AUTOMATION_TIMEOUT_MS = 3 * 60 * 1000;
+    const automationTask = automateChannelBrowsing(adb, channels);
     const timeoutTask = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('自动化操控超时（超过 3 分钟），强制终止')), AUTOMATION_TIMEOUT_MS);
+      setTimeout(() => reject(new Error('频道浏览超时（超过 3 分钟），强制终止')), AUTOMATION_TIMEOUT_MS);
     });
 
-    let automationResult = { screenshots: [] };
     try {
-      automationResult = await Promise.race([automationTask, timeoutTask]);
+      await Promise.race([automationTask, timeoutTask]);
     } catch (timeoutErr) {
       progress.log(`[超时] ${timeoutErr.message}`);
       progress.log('继续尝试读取已拦截的数据...');
     }
-
-    const { screenshots } = automationResult;
-    progress.log(`自动化操控完成，截图 ${screenshots.length} 张`);
 
     // 6. 读取拦截到的数据
     progress.step('解析数据', '读取 mitmproxy 拦截的 API 响应');
@@ -476,27 +576,6 @@ async function scrapeAll(options = {}) {
     }
 
     progress.log(`解析得到 ${products.length} 个商品`);
-
-    // 将模拟器截图匹配到商品
-    if (screenshots.length > 0) {
-      progress.log(`匹配 ${screenshots.length} 张模拟器截图到商品...`);
-      const keywordToImage = new Map();
-      for (const s of screenshots) {
-        keywordToImage.set(s.keyword.toLowerCase(), s.filePath);
-      }
-      let matched = 0;
-      for (const p of products) {
-        const nameLower = (p.name || '').toLowerCase();
-        for (const [kw, imgPath] of keywordToImage) {
-          if (nameLower.includes(kw) || kw.includes(nameLower.split(' ')[0])) {
-            p.localImagePath = imgPath;
-            matched++;
-            break;
-          }
-        }
-      }
-      progress.log(`  成功匹配 ${matched} 个商品的截图`);
-    }
 
   } finally {
     // 8. 清理：移除 SIGINT 监听器并释放资源

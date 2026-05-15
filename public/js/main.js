@@ -49,6 +49,39 @@ document.addEventListener('DOMContentLoaded', function() {
       loadContent(contentId);
     });
   });
+
+  // 勾选种草逻辑
+  const checkboxes = document.querySelectorAll('.product-checkbox');
+  const seedBar = document.getElementById('seedBar');
+  const seedCount = document.getElementById('seedCount');
+  const seedBtn = document.getElementById('seedBtn');
+
+  if (checkboxes.length > 0 && seedBar && seedBtn) {
+    checkboxes.forEach(cb => {
+      cb.addEventListener('change', function() {
+        const checked = document.querySelectorAll('.product-checkbox:checked');
+        const count = checked.length;
+        seedCount.textContent = count;
+        seedBar.style.display = count > 0 ? 'flex' : 'none';
+        seedBtn.disabled = count === 0 || count > 2;
+
+        if (count > 2) {
+          seedBtn.textContent = '最多选 2 个';
+        } else {
+          seedBtn.textContent = '种草已选';
+        }
+      });
+    });
+
+    seedBtn.addEventListener('click', function() {
+      const checked = document.querySelectorAll('.product-checkbox:checked');
+      if (checked.length === 0) return;
+
+      // 跳转到第一个选中商品的详情页
+      const firstId = checked[0].value;
+      window.location.href = '/' + firstId;
+    });
+  }
 });
 
 function setScrapeStatusVisible(visible) {
@@ -60,6 +93,7 @@ function setScrapeStatusVisible(visible) {
 // 抓取进度面板状态
 let scrapeEventSource = null;
 let scrapeConsoleExpanded = true;
+let scrapeLogsReplayed = false; // 防止 SSE 重连时重复回放日志
 
 // 定义步骤配置
 const SCRAPE_STEPS = [
@@ -193,16 +227,29 @@ function setScrapePanelState(state) {
   }
 }
 
+function showReloadButton() {
+  const panel = document.getElementById('scrapePanel');
+  if (!panel) return;
+  let reloadBtn = document.getElementById('scrapeReloadBtn');
+  if (!reloadBtn) {
+    reloadBtn = document.createElement('button');
+    reloadBtn.id = 'scrapeReloadBtn';
+    reloadBtn.className = 'scrape-btn';
+    reloadBtn.style.marginTop = '8px';
+    reloadBtn.textContent = '刷新查看结果';
+    reloadBtn.onclick = function() { window.location.reload(); };
+    panel.appendChild(reloadBtn);
+  }
+  reloadBtn.style.display = 'flex';
+}
+
 // 开始抓取
 async function startScrape() {
   const btn = this;
   btn.disabled = true;
 
-  // 获取数据源选择
-  const sourceSelect = document.getElementById('scrapeSource');
-  const source = sourceSelect ? sourceSelect.value : 'emulator';
-
   // 初始化并显示进度面板
+  scrapeLogsReplayed = false;
   initScrapePanel();
   setScrapePanelState('running');
 
@@ -210,7 +257,7 @@ async function startScrape() {
     const response = await fetch('/api/products/scrape', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ source })
+      body: JSON.stringify({ channels: ['穿搭', '潮玩'] })
     });
 
     const data = await response.json();
@@ -223,9 +270,7 @@ async function startScrape() {
     }
 
     // 连接 SSE 接收实时进度
-    console.log('[Scrape] POST成功，准备连接SSE');
     connectScrapeSSE();
-    console.log('[Scrape] SSE连接已发起');
 
   } catch (err) {
     showToast('error', '抓取失败: ' + err.message);
@@ -244,7 +289,6 @@ function connectScrapeSSE() {
   scrapeEventSource.onmessage = function(event) {
     try {
       const data = JSON.parse(event.data);
-      console.log('[SSE收到]', JSON.stringify(data).slice(0, 200));
 
       if (data.type === 'log') {
         appendScrapeLog(data.message, data.level);
@@ -259,7 +303,7 @@ function connectScrapeSSE() {
         showToast('success', data.message || '抓取完成');
         scrapeEventSource.close();
         scrapeEventSource = null;
-        setTimeout(() => window.location.reload(), 3000);
+        showReloadButton();
       } else if (data.type === 'error') {
         setScrapePanelState('error');
         appendScrapeLog('✗ ' + (data.message || '失败'), 'error');
@@ -271,18 +315,19 @@ function connectScrapeSSE() {
         scrapeEventSource = null;
       } else if (data.status === 'done' || data.status === 'error') {
         setScrapePanelState(data.status);
-        if (data.logs) {
+        if (data.status === 'done' && !scrapeLogsReplayed && data.logs) {
           data.logs.forEach(function(log) { appendScrapeLog(log.message, log.level); });
         }
         scrapeEventSource.close();
         scrapeEventSource = null;
         if (data.status === 'done') {
-          setTimeout(() => window.location.reload(), 3000);
+          showReloadButton();
         }
       } else if (data.status === 'running' || data.active) {
-        // SSE 连接建立时收到初始状态，回放缓冲的 logs/steps/progress
-        if (data.logs && data.logs.length) {
+        // SSE 重连时收到初始状态，只回放一次日志
+        if (!scrapeLogsReplayed && data.logs && data.logs.length) {
           data.logs.forEach(function(log) { appendScrapeLog(log.message, log.level); });
+          scrapeLogsReplayed = true;
         }
         if (data.currentStep) {
           updateScrapeStep(data.currentStep);

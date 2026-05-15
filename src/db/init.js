@@ -80,6 +80,11 @@ function initTables() {
     )
   `);
 
+  // 新增 source_channel 字段（兼容旧数据库）
+  try {
+    db.run(`ALTER TABLE products ADD COLUMN source_channel TEXT DEFAULT ''`);
+  } catch (e) { /* 列已存在，忽略 */ }
+
   // 保存数据库
   saveDb();
 }

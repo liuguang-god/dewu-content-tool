@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
 const { productQueries, contentQueries } = require('../db/queries');
-const { scrapeAll: webScrapeAll } = require('../scraper/dewu');
 const { scrapeAll: emulatorScrapeAll } = require('../scraper/emulator');
 const { scrapeProgress } = require('../scraper/progress');
 
@@ -61,9 +60,7 @@ router.get('/:id', async (req, res) => {
 // 触发爬虫
 router.post('/scrape', async (req, res) => {
   try {
-    const source = req.body?.source || req.query?.source || 'emulator';
-    const scrapeFn = source === 'emulator' ? emulatorScrapeAll : webScrapeAll;
-    const sourceLabel = source === 'emulator' ? '模拟器' : '网页';
+    const channels = req.body?.channels || ['穿搭', '潮玩'];
 
     // 如果已有爬虫在运行，拒绝
     if (scrapeProgress.active) {
@@ -73,19 +70,20 @@ router.post('/scrape', async (req, res) => {
       });
     }
 
-    console.log(`爬虫任务启动，数据源: ${sourceLabel}`);
+    console.log(`爬虫任务启动，频道: ${channels.join(', ')}`);
 
     // 初始化进度
-    scrapeProgress.start(source);
+    scrapeProgress.start('emulator');
 
     // 异步执行爬虫
-    scrapeFn({
+    emulatorScrapeAll({
       keepDays: 7,
       maxItems: 200,
       downloadImages: true,
       imageConcurrency: 4,
       imageTimeoutMs: 12000,
-      progress: scrapeProgress
+      progress: scrapeProgress,
+      channels
     }).catch(err => {
       console.error('爬虫错误:', err);
       scrapeProgress.fail('爬虫异常: ' + err.message);
@@ -93,7 +91,7 @@ router.post('/scrape', async (req, res) => {
 
     res.json({
       success: true,
-      message: `${sourceLabel}爬虫任务已启动`
+      message: `频道爬取任务已启动: ${channels.join(', ')}`
     });
   } catch (err) {
     res.status(500).json({
@@ -123,17 +121,13 @@ router.get('/scrape/stream', (req, res) => {
   }
 
   // 监听事件
-  console.log(`[SSE] 客户端连接，当前状态: active=${scrapeProgress.active}, status=${scrapeProgress.status}, logs=${scrapeProgress.logs.length}`);
   const onLog = (entry) => {
-    console.log(`[SSE] 推送 log: ${entry.message}`);
     res.write(`data: ${JSON.stringify({ type: 'log', ...entry })}\n\n`);
   };
   const onStep = (step) => {
-    console.log(`[SSE] 推送 step: ${step.name}`);
     res.write(`data: ${JSON.stringify({ type: 'step', ...step })}\n\n`);
   };
   const onProgress = (p) => {
-    console.log(`[SSE] 推送 progress: ${p.percent}%`);
     res.write(`data: ${JSON.stringify({ type: 'progress', ...p })}\n\n`);
   };
   const onDone = (result) => {

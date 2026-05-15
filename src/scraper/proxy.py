@@ -21,8 +21,23 @@ OUTPUT_FILE = os.path.join(OUTPUT_DIR, 'captured.json')
 
 # 得物 API URL 关键词匹配
 PRODUCT_KEYWORDS = ['search', 'goods', 'spu', 'product', 'detail']
-COMMUNITY_KEYWORDS = ['community', 'note', 'feed', 'home', 'recommend']
+COMMUNITY_KEYWORDS = ['community', 'note', 'feed', 'home', 'recommend', 'channel', 'homepage', 'tabFeed']
 EXCLUDE_KEYWORDS = ['.css', '.js', '.png', '.jpg', '.webp', '.gif', '.svg', '.ico', 'log', 'report', 'stat']
+
+# 频道状态文件路径（由 emulator.js 写入）
+CHANNEL_STATE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data', 'channel_state.json')
+
+
+def get_active_channel():
+    """读取当前活跃频道（由 emulator.js 写入的状态文件）"""
+    try:
+        if os.path.exists(CHANNEL_STATE_FILE):
+            with open(CHANNEL_STATE_FILE, 'r', encoding='utf-8') as f:
+                state = json.load(f)
+                return state.get('channel', '')
+    except Exception:
+        pass
+    return ''
 
 
 def should_capture(url):
@@ -114,7 +129,8 @@ def extract_products_from_json(data, url):
             'productUrl': product_url,
             'brand': brand,
             'hotScore': int(hot_score) if hot_score else 80,
-            'sourceUrl': url
+            'sourceUrl': url,
+            'sourceChannel': get_active_channel()
         })
 
     return products

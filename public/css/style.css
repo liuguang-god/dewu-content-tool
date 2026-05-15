@@ -709,6 +709,130 @@ a:hover {
   color: oklch(40% 0.1 340);
 }
 
+/* 频道标签 */
+.product-channel-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 600;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  backdrop-filter: blur(4px);
+  z-index: 2;
+  letter-spacing: 0.03em;
+}
+
+/* 商品卡片容器（含勾选框） */
+.product-card-wrap {
+  position: relative;
+}
+
+/* 勾选框 */
+.product-select {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 5;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.product-checkbox {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.product-checkmark {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.7);
+  background: rgba(0,0,0,0.25);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.product-checkbox:checked + .product-checkmark {
+  background: var(--accent, #3b82f6);
+  border-color: var(--accent, #3b82f6);
+}
+
+.product-checkbox:checked + .product-checkmark::after {
+  content: '';
+  width: 6px;
+  height: 10px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg) translateY(-1px);
+}
+
+.product-select:hover .product-checkmark {
+  border-color: #fff;
+  background: rgba(0,0,0,0.45);
+}
+
+/* 种草底部操作栏 */
+.seed-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 56px;
+  background: var(--surface, #fff);
+  border-top: 1px solid var(--border, #e5e5e5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  z-index: 100;
+  box-shadow: 0 -2px 12px rgba(0,0,0,0.06);
+}
+
+.seed-bar-text {
+  font-size: 13px;
+  color: var(--muted, #888);
+}
+
+.seed-bar-text strong {
+  color: var(--fg, #1a1a1a);
+  font-variant-numeric: tabular-nums;
+}
+
+.seed-btn {
+  padding: 8px 24px;
+  border: none;
+  border-radius: 8px;
+  background: var(--accent, #3b82f6);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s, transform 0.1s;
+}
+
+.seed-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.seed-btn:not(:disabled):hover {
+  opacity: 0.9;
+}
+
+.seed-btn:not(:disabled):active {
+  transform: scale(0.97);
+}
+
 .product-status {
   position: absolute;
   top: 8px;

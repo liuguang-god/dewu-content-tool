@@ -44,16 +44,30 @@
     <hr class="sidebar-divider">
 
     <div class="sidebar-section">
-      <div style="margin-bottom:8px">
-        <label for="scrapeSource" style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">数据源</label>
-        <select id="scrapeSource" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--fg);font-size:12px">
-          <option value="emulator">模拟器 (MuMu + mitmproxy)</option>
-          <option value="web">网页 (Puppeteer)</option>
-        </select>
-      </div>
+      <div class="sidebar-label">来源频道</div>
+      <a class="filter-item <%= !currentChannel ? 'active' : '' %>"
+         href="/?<%= currentCategory ? 'category=' + currentCategory + '&' : '' %><%= currentStatus ? 'status=' + currentStatus + '&' : '' %>">
+        全部
+        <span class="filter-count"><%= typeof totalAllProducts !== 'undefined' ? totalAllProducts : (total || 0) %></span>
+      </a>
+      <a class="filter-item <%= currentChannel === '穿搭' ? 'active' : '' %>"
+         href="/?sourceChannel=穿搭<%= currentCategory ? '&category=' + currentCategory : '' %><%= currentStatus ? '&status=' + currentStatus : '' %>">
+        穿搭
+        <span class="filter-count"><%= channelCounts['穿搭'] || 0 %></span>
+      </a>
+      <a class="filter-item <%= currentChannel === '潮玩' ? 'active' : '' %>"
+         href="/?sourceChannel=潮玩<%= currentCategory ? '&category=' + currentCategory : '' %><%= currentStatus ? '&status=' + currentStatus : '' %>">
+        潮玩
+        <span class="filter-count"><%= channelCounts['潮玩'] || 0 %></span>
+      </a>
+    </div>
+
+    <hr class="sidebar-divider">
+
+    <div class="sidebar-section">
       <button class="scrape-btn" id="scrapeBtnEmpty" type="button">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.35 10.04A7.49 7.49 0 0012 4C9.11 4 6.6 5.64 5.35 8.04A5.994 5.994 0 000 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM19 18H6c-2.21 0-4-1.79-4-4s1.79-4 4-4h.71C7.37 7.69 9.48 6 12 6c3.04 0 5.5 2.46 5.5 5.5v.5H19c1.66 0 3 1.34 3 3s-1.34 3-3 3z"/></svg>
-        抓取新商品
+        抓取新商品（穿搭+潮玩）
       </button>
 
       <div class="scrape-panel" id="scrapePanel" style="display:none">
@@ -109,44 +123,61 @@
     <% } else { %>
       <div class="product-grid">
         <% products.forEach(function(p) { %>
-          <a class="product-card" href="/<%= p.id %>">
-            <div class="product-image">
-              <% if (p.local_image_path || p.image_url) { %>
-                <img src="<%= p.local_image_path || p.image_url %>"
-                     alt="<%= p.name %>"
-                     onerror="this.onerror=null;this.src='data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%22600%22%20height%3D%22600%22%20viewBox%3D%220%200%20600%20600%22%3E%3Crect%20width%3D%22600%22%20height%3D%22600%22%20fill%3D%22%23f2f4f7%22/%3E%3Cpath%20d%3D%22M170%20440h260c16%200%2030-14%2030-30V220c0-16-14-30-30-30H170c-16%200-30%2014-30%2030v190c0%2016%2014%2030%2030%2030z%22%20fill%3D%22%23d8dde6%22/%3E%3Cpath%20d%3D%22M210%20330l55-55%2035%2035%2060-60%2080%2080v55H210z%22%20fill%3D%22%23b7c0cf%22/%3E%3Ccircle%20cx%3D%22255%22%20cy%3D%22260%22%20r%3D%2224%22%20fill%3D%22%23b7c0cf%22/%3E%3Ctext%20x%3D%22300%22%20y%3D%22515%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20sans-serif%22%20font-size%3D%2220%22%20fill%3D%22%236b7280%22%3EImage%20unavailable%3C/text%3E%3C/svg%3E'">
-              <% } else { %>
-                <div class="placeholder"><%= categoryMap[p.category]?.icon || '🏷️' %></div>
-              <% } %>
+          <div class="product-card-wrap">
+            <label class="product-select" title="勾选种草">
+              <input type="checkbox" class="product-checkbox" value="<%= p.id %>" data-name="<%= p.name %>">
+              <span class="product-checkmark"></span>
+            </label>
+            <a class="product-card" href="/<%= p.id %>">
+              <div class="product-image">
+                <% if (p.local_image_path || p.image_url) { %>
+                  <img src="<%= p.local_image_path || p.image_url %>"
+                       alt="<%= p.name %>"
+                       onerror="this.onerror=null;this.src='data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%22600%22%20height%3D%22600%22%20viewBox%3D%220%200%20600%20600%22%3E%3Crect%20width%3D%22600%22%20height%3D%22600%22%20fill%3D%22%23f2f4f7%22/%3E%3Cpath%20d%3D%22M170%20440h260c16%200%2030-14%2030-30V220c0-16-14-30-30-30H170c-16%200-30%2014-30%2030v190c0%2016%2014%2030%2030%2030z%22%20fill%3D%22%23d8dde6%22/%3E%3Cpath%20d%3D%22M210%20330l55-55%2035%2035%2060-60%2080%2080v55H210z%22%20fill%3D%22%23b7c0cf%22/%3E%3Ccircle%20cx%3D%22255%22%20cy%3D%22260%22%20r%3D%2224%22%20fill%3D%22%23b7c0cf%22/%3E%3Ctext%20x%3D%22300%22%20y%3D%22515%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20sans-serif%22%20font-size%3D%2220%22%20fill%3D%22%236b7280%22%3EImage%20unavailable%3C/text%3E%3C/svg%3E'">
+                <% } else { %>
+                  <div class="placeholder"><%= categoryMap[p.category]?.icon || '🏷️' %></div>
+                <% } %>
 
-              <% const catInfo = categoryMap[p.category]; %>
-              <% if (catInfo) { %>
-                <span class="product-badge badge-<%= p.category %>"><%= catInfo.badge %></span>
-              <% } %>
+                <% if (p.source_channel) { %>
+                  <span class="product-channel-badge"><%= p.source_channel %></span>
+                <% } %>
 
-              <% if (p.status === 'pending') { %>
-                <span class="product-status status-pending" data-tooltip="未处理"></span>
-              <% } else if (p.status === 'processed') { %>
-                <span class="product-status status-processed" data-tooltip="已生成内容"></span>
-              <% } else if (p.status === 'published') { %>
-                <span class="product-status status-published" data-tooltip="已发布"></span>
-              <% } %>
-            </div>
+                <% const catInfo = categoryMap[p.category]; %>
+                <% if (catInfo) { %>
+                  <span class="product-badge badge-<%= p.category %>"><%= catInfo.badge %></span>
+                <% } %>
 
-            <div class="product-info">
-              <div class="product-name"><%= p.name %></div>
-              <div class="product-price-row">
-                <span class="product-price"><%= p.price ? ('¥' + p.price) : '价格待定' %></span>
-                <span class="product-unit"><%= p.price ? '券后价' : '' %></span>
+                <% if (p.status === 'pending') { %>
+                  <span class="product-status status-pending" data-tooltip="未处理"></span>
+                <% } else if (p.status === 'processed') { %>
+                  <span class="product-status status-processed" data-tooltip="已生成内容"></span>
+                <% } else if (p.status === 'published') { %>
+                  <span class="product-status status-published" data-tooltip="已发布"></span>
+                <% } %>
               </div>
-              <div class="product-hot">
-                <div class="hot-bar"><div class="hot-fill" style="width:<%= Math.min(100, Math.max(0, (Number(p.hot_score) || 0) / 15000 * 100)) %>%"></div></div>
-                <span class="hot-score">热度 <%= p.hot_score || 0 %></span>
+
+              <div class="product-info">
+                <div class="product-name"><%= p.name %></div>
+                <div class="product-price-row">
+                  <span class="product-price"><%= p.price ? ('¥' + p.price) : '价格待定' %></span>
+                  <span class="product-unit"><%= p.price ? '券后价' : '' %></span>
+                </div>
+                <div class="product-hot">
+                  <div class="hot-bar"><div class="hot-fill" style="width:<%= Math.min(100, Math.max(0, (Number(p.hot_score) || 0) / 15000 * 100)) %>%"></div></div>
+                  <span class="hot-score">热度 <%= p.hot_score || 0 %></span>
+                </div>
               </div>
-            </div>
-          </a>
+            </a>
+          </div>
         <% }) %>
       </div>
+
+      <% if (products && products.length > 0) { %>
+        <div class="seed-bar" id="seedBar" style="display:none">
+          <span class="seed-bar-text">已选 <strong id="seedCount">0</strong> 个商品</span>
+          <button class="seed-btn" id="seedBtn" disabled>种草已选</button>
+        </div>
+      <% } %>
     <% } %>
   </main>
 </div>

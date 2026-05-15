@@ -26,18 +26,19 @@ app.get('/', async (req, res) => {
   try {
     const { productQueries } = require('./src/db/queries');
 
-    const { category, status, page = 1 } = req.query;
+    const { category, status, sourceChannel, page = 1 } = req.query;
     const limit = 20;
 
     const pageNum = Number.parseInt(String(page), 10);
     const products = await productQueries.getAll({
       category,
       status,
+      sourceChannel,
       page: pageNum,
       limit
     });
 
-    const total = await productQueries.count({ category, status });
+    const total = await productQueries.count({ category, status, sourceChannel });
     const totalPages = Math.ceil(total / limit);
 
     // 侧边栏数量：品类在「当前状态」下的件数；状态在「当前品类」下的件数；全部商品为全局总数
@@ -66,16 +67,21 @@ app.get('/', async (req, res) => {
     const countProcessed = countResults[3 + categoryKeys.length];
     const countPublished = countResults[4 + categoryKeys.length];
 
+    // 频道计数
+    const channelCounts = await productQueries.channelCounts();
+
     res.render('index', {
       products: products || [],
       currentCategory: category || '',
       currentStatus: status || '',
+      currentChannel: sourceChannel || '',
       currentPage: pageNum,
       totalPages,
       total,
       totalAllProducts,
       categories: getAllCategories(),
       categoryCounts,
+      channelCounts,
       categoryMap: getCategoryMap(),
       countStatusAll,
       countPending,

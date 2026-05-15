@@ -82,7 +82,8 @@ function parseProducts(rawProducts) {
       imageUrl,
       localImagePath: null,
       productUrl,
-      hotScore
+      hotScore,
+      sourceChannel: item.sourceChannel || ''
     });
   }
 
@@ -150,7 +151,8 @@ function extractFromRawResponses(rawResponses) {
             imageUrl,
             localImagePath: null,
             productUrl: spuId ? `https://www.dewu.com/product/detail/${spuId}` : '',
-            hotScore: item.hotScore || item.likeCount || 80
+            hotScore: item.hotScore || item.likeCount || 80,
+            sourceChannel: item.sourceChannel || ''
           });
         }
       }
